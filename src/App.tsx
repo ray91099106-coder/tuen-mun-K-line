@@ -125,13 +125,13 @@ export default function App() {
             
             return (
               <div key={route} className={`flex flex-col items-center p-2 bg-slate-50 rounded-xl border shadow-sm transition-all ${styles.border}`}>
-                <span className="text-sm font-black text-blue-700">{route}</span>
-                <div className="mt-1">
+                <span className="text-base font-black text-blue-700 leading-tight">{route}</span>
+                <div className="mt-0.5">
                   {loading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
                     <div className="w-8 h-4 bg-slate-200 animate-pulse rounded" />
                   ) : arrival ? (
                     <div className="flex items-baseline gap-0.5">
-                      <span className={`text-lg font-black ${styles.text}`}>
+                      <span className={`text-lg font-black leading-none ${styles.text}`}>
                         {arrival.remainingMinutes}
                       </span>
                       <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
@@ -154,7 +154,7 @@ export default function App() {
 
             return (
               <div key={route} className={`flex items-center justify-between px-4 py-2 bg-slate-50 rounded-xl border shadow-sm transition-all ${styles.border}`}>
-                <span className="text-sm font-black text-blue-700">{route}</span>
+                <span className="text-base font-black text-blue-700">{route}</span>
                 <div>
                   {loading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
                     <div className="w-8 h-4 bg-slate-200 animate-pulse rounded" />
@@ -217,14 +217,14 @@ export default function App() {
                         return (
                           <div key={`${stop.id}-${stop.route}`} className={`bg-slate-50 border rounded-xl p-1.5 flex flex-col items-center shadow-sm transition-all ${styles.border}`}>
                             <div className="flex items-center gap-1 mb-0.5">
-                              <span className="text-sm font-black text-blue-700">{stop.route}</span>
+                              <span className="text-base font-black text-blue-700 leading-tight">{stop.route}</span>
                             </div>
                             <div className="flex items-baseline gap-0.5">
                               {loading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
                                 <div className="w-6 h-4 bg-slate-200 animate-pulse rounded" />
                               ) : arrival ? (
                                 <>
-                                  <span className={`text-base font-black ${styles.text}`}>
+                                  <span className={`text-base font-black leading-none ${styles.text}`}>
                                     {arrival.remainingMinutes}
                                   </span>
                                   <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
