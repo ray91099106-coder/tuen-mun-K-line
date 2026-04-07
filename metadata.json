@@ -1,0 +1,5 @@
+{
+  "name": "HK Bus ETA Tracker",
+  "description": "Real-time arrival information for KMB and MTR Bus routes, demonstrating multi-operator API integration.",
+  "requestFramePermissions": []
+}
