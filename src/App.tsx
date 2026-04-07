@@ -7,7 +7,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bus, Clock, RefreshCw, MapPin, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { BusArrival, StopInfo } from './types';
-import { fetchETA, STOPS } from './services/busService';
+import { fetchAllETA, STOPS } from './services/busService';
 
 export default function App() {
   const [arrivals, setArrivals] = useState<Record<string, BusArrival[]>>({});
@@ -20,11 +20,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const results = await Promise.all(STOPS.map(stop => fetchETA(stop)));
-      const newArrivals: Record<string, BusArrival[]> = {};
-      STOPS.forEach((stop, index) => {
-        newArrivals[`${stop.id}-${stop.route}`] = results[index];
-      });
+      const newArrivals = await fetchAllETA(STOPS);
       setArrivals(newArrivals);
       setLastUpdated(new Date());
     } catch (err) {

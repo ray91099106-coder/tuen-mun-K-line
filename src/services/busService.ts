@@ -169,24 +169,54 @@ export const STOPS: StopInfo[] = [
   },
 ];
 
-export async function fetchETA(stop: StopInfo): Promise<BusArrival[]> {
+export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, BusArrival[]>> {
   const now = new Date();
+  const results: Record<string, BusArrival[]> = {};
 
-  // Both KMB and MTRB data are sourced via Data.gov.hk (transportdata.gov.hk)
-  if (stop.operator === 'KMB') {
+  // Group stops by operator and then by route (MTRB) or stopId (KMB)
+  const kmbStopIds = Array.from(new Set(stops.filter(s => s.operator === 'KMB').map(s => s.id)));
+  const mtrbRoutes = Array.from(new Set(stops.filter(s => s.operator === 'MTRB').map(s => s.route)));
+
+  // Fetch KMB data in parallel (one request per unique stopId)
+  const kmbPromises = kmbStopIds.map(async (stopId) => {
     try {
-      // Use local proxy to bypass CORS
-      const response = await fetch(`/api/bus/kmb/${stop.id}`);
+      const response = await fetch(`/api/bus/kmb/${stopId}`);
       const data: KMBETAResponse = await response.json();
+      return { stopId, data: data.data || [] };
+    } catch (error) {
+      console.error(`KMB API Error for stop ${stopId}:`, error);
+      return { stopId, data: [] };
+    }
+  });
 
-      if (!data.data || !Array.isArray(data.data)) {
-        console.warn(`KMB API returned no data for stop ${stop.id}`);
-        return [];
-      }
+  // Fetch MTRB data in parallel (one request per unique route)
+  const mtrbPromises = mtrbRoutes.map(async (route) => {
+    try {
+      const response = await fetch('/api/bus/mtrb', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routeName: route, language: 'zh' }),
+      });
+      const data: MTRBETAResponse = await response.json();
+      return { route, data: data.busStop || [] };
+    } catch (error) {
+      console.error(`MTRB API Error for route ${route}:`, error);
+      return { route, data: [] };
+    }
+  });
 
-      // Filter by route and bound
-      // Note: KMB ETA API uses 'dir' (O/I)
-      const filtered = data.data
+  const [kmbResults, mtrbResults] = await Promise.all([
+    Promise.all(kmbPromises),
+    Promise.all(mtrbPromises)
+  ]);
+
+  // Map results back to individual stops
+  stops.forEach(stop => {
+    const key = `${stop.id}-${stop.route}`;
+    
+    if (stop.operator === 'KMB') {
+      const stopData = kmbResults.find(r => r.stopId === stop.id)?.data || [];
+      const filtered = stopData
         .filter((item) => item.route === stop.route && (item.dir === stop.bound || !stop.bound))
         .sort((a, b) => {
           if (!a.eta) return 1;
@@ -195,7 +225,7 @@ export async function fetchETA(stop: StopInfo): Promise<BusArrival[]> {
         })
         .slice(0, 3);
 
-      return filtered.map((item) => {
+      results[key] = filtered.map((item) => {
         const etaDate = item.eta ? new Date(item.eta) : null;
         const diff = etaDate ? Math.floor((etaDate.getTime() - now.getTime()) / 60000) : null;
         return {
@@ -206,58 +236,27 @@ export async function fetchETA(stop: StopInfo): Promise<BusArrival[]> {
           remark: item.rmk_tc || '',
         };
       });
-    } catch (error) {
-      console.error('KMB API Error:', error);
-      return [];
-    }
-  } else {
-    try {
-      // Use local proxy to bypass CORS
-      const response = await fetch('/api/bus/mtrb', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          routeName: stop.route,
-          language: 'zh',
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`MTRB API returned status ${response.status}`);
-      }
-
-      const data: MTRBETAResponse = await response.json();
-
-      if (!data.busStop || !Array.isArray(data.busStop)) {
-        console.warn(`MTRB API returned no data for route ${stop.route}`);
-        return [];
-      }
-
-      // Find the specific stop (handle comma-separated IDs if provided)
+    } else {
+      const routeData = mtrbResults.find(r => r.route === stop.route)?.data || [];
       const stopIdToMatch = stop.id.split(',')[0];
-      const stopData = data.busStop.find((s) => s.busStopId === stopIdToMatch);
+      const stopData = routeData.find((s) => s.busStopId === stopIdToMatch);
       
       if (!stopData || !stopData.bus || !Array.isArray(stopData.bus)) {
-        console.warn(`MTRB API: Stop ${stop.id} not found in route ${stop.route}`);
-        return [];
+        results[key] = [];
+        return;
       }
 
-      // Map to BusArrival[]
-      return stopData.bus.map((item) => {
+      results[key] = stopData.bus.map((item) => {
         let remainingMinutes = item.departureTimeInSecond 
           ? Math.floor(parseInt(item.departureTimeInSecond) / 60) 
           : 0;
         
-        // Apply user-requested offsets: 新墟 K51 (-2m), 屯門站 K51 (-2m)
         if (stop.route === 'K51') {
           if (stop.id === 'K51-U070,6' || stop.id === 'K51-U080,7') {
             remainingMinutes = Math.max(0, remainingMinutes - 2);
           }
         }
         
-        // Determine destination based on route and lineRef
         let destination = '未知目的地';
         if (stop.route === 'K51') destination = '富泰 (Fu Tai)';
         else if (stop.route === 'K53') destination = '屯門站 (Tuen Mun Station)';
@@ -271,9 +270,8 @@ export async function fetchETA(stop: StopInfo): Promise<BusArrival[]> {
           remark: item.busRemark || '',
         };
       });
-    } catch (error) {
-      console.error('MTRB API Error:', error);
-      return [];
     }
-  }
+  });
+
+  return results;
 }
