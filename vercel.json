@@ -1,5 +1,16 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/bus/kmb/:stopId",
+      "destination": "https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/:stopId"
+    },
+    {
+      "source": "/api/bus/mtrb",
+      "destination": "https://rt.data.gov.hk/v1/transport/mtr/bus/getSchedule"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
