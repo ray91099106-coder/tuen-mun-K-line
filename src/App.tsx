@@ -36,8 +36,33 @@ export default function App() {
 
   useEffect(() => {
     refreshAll();
-    const interval = setInterval(refreshAll, 30000); // Auto-refresh every 30s
-    return () => clearInterval(interval);
+    
+    let interval: ReturnType<typeof setInterval>;
+
+    const startTimer = () => {
+      interval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          refreshAll();
+        }
+      }, 30000);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshAll(); // Refresh immediately when coming back
+        startTimer();
+      } else {
+        clearInterval(interval);
+      }
+    };
+
+    startTimer();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [refreshAll]);
 
   const pinnedStops = STOPS.filter(s => s.category === 'pinned');
