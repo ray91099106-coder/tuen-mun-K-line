@@ -175,9 +175,8 @@ export async function fetchETA(stop: StopInfo): Promise<BusArrival[]> {
   // Both KMB and MTRB data are sourced via Data.gov.hk (transportdata.gov.hk)
   if (stop.operator === 'KMB') {
     try {
-      // KMB Open Data API (via Data.gov.hk)
-      // Endpoint: https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/{stop_id}
-      const response = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${stop.id}`);
+      // Use local proxy to bypass CORS
+      const response = await fetch(`/api/bus/kmb/${stop.id}`);
       const data: KMBETAResponse = await response.json();
 
       if (!data.data || !Array.isArray(data.data)) {
@@ -213,10 +212,8 @@ export async function fetchETA(stop: StopInfo): Promise<BusArrival[]> {
     }
   } else {
     try {
-      // MTR Bus API (via Data.gov.hk)
-      // Endpoint: https://rt.data.gov.hk/v1/transport/mtr/bus/getSchedule
-      // Method: POST
-      const response = await fetch('https://rt.data.gov.hk/v1/transport/mtr/bus/getSchedule', {
+      // Use local proxy to bypass CORS
+      const response = await fetch('/api/bus/mtrb', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

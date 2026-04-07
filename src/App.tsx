@@ -62,6 +62,25 @@ export default function App() {
     return { text: 'text-slate-900', border: 'border-slate-100' };
   };
 
+  const RefreshControl = () => (
+    <div className="flex items-center gap-3">
+      <div className="text-right leading-tight">
+        <p className="text-[9px] uppercase font-bold opacity-80">最後更新</p>
+        <p className="text-xs font-mono font-bold">{lastUpdated.toLocaleTimeString()}</p>
+      </div>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          refreshAll();
+        }}
+        disabled={loading}
+        className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-all active:scale-90 disabled:opacity-50"
+      >
+        <RefreshCw className={`w-4 h-4 text-white ${loading ? 'animate-spin' : ''}`} />
+      </button>
+    </div>
+  );
+
   const renderPinnedSection = () => (
     <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
       <div className="p-4 border-b border-slate-100 bg-blue-600 text-white flex items-center justify-between">
@@ -69,7 +88,7 @@ export default function App() {
           <MapPin className="w-5 h-5" />
           往屯門
         </h2>
-        <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">置頂路線</span>
+        {!isHomeOpen ? <RefreshControl /> : <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">置頂路線</span>}
       </div>
       <div className="p-4 space-y-4">
         {/* Row 1: MTRB K-Routes */}
@@ -143,7 +162,8 @@ export default function App() {
           <Bus className="w-5 h-5" />
           回家
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {isHomeOpen && <RefreshControl />}
           {isHomeOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </div>
       </button>
@@ -204,22 +224,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
-        {/* Header */}
-        <header className="flex items-center justify-end gap-4">
-          <div className="text-right">
-            <p className="text-xs text-slate-400 uppercase font-semibold tracking-wider">最後更新</p>
-            <p className="text-sm font-mono text-slate-600">{lastUpdated.toLocaleTimeString()}</p>
-          </div>
-          <button
-            onClick={refreshAll}
-            disabled={loading}
-            className="p-3 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-95 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-5 h-5 text-blue-600 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-        </header>
-
+      <div className="max-w-4xl mx-auto space-y-6">
         {error && (
           <div className="bg-red-50 border border-red-100 p-4 rounded-xl flex items-center gap-3 text-red-700">
             <AlertCircle className="w-5 h-5" />
