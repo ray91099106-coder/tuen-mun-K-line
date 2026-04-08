@@ -38,6 +38,28 @@ async function startServer() {
     }
   });
 
+  // CTB Proxy
+  app.get("/api/bus/ctb/:stopId/:route", async (req, res) => {
+    try {
+      const response = await fetch(`https://rt.data.gov.hk/v1/transport/citybus-nwfb/eta/CTB/${req.params.stopId}/${req.params.route}`);
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch CTB data" });
+    }
+  });
+
+  // GMB Proxy
+  app.get("/api/bus/gmb/eta/:routeId/:stopId", async (req, res) => {
+    try {
+      const response = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/${req.params.routeId}/${req.params.stopId}`);
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch GMB data" });
+    }
+  });
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

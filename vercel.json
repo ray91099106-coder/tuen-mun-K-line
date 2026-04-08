@@ -9,6 +9,22 @@
       "destination": "https://rt.data.gov.hk/v1/transport/mtr/bus/getSchedule"
     },
     {
+      "source": "/api/bus/ctb/:stopId/:route",
+      "destination": "https://rt.data.gov.hk/v1/transport/citybus-nwfb/eta/CTB/:stopId/:route"
+    },
+    {
+      "source": "/api/bus/gmb/route/:region/:route",
+      "destination": "https://rt.data.gov.hk/v1/transport/gmb/route/:region/:route"
+    },
+    {
+      "source": "/api/bus/gmb/stop/:region/:routeId/:direction",
+      "destination": "https://rt.data.gov.hk/v1/transport/gmb/route-stop/:region/:routeId/:direction"
+    },
+    {
+      "source": "/api/bus/gmb/eta/:routeId/:stopId",
+      "destination": "https://data.etagmb.gov.hk/eta/route-stop/:routeId/:stopId"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

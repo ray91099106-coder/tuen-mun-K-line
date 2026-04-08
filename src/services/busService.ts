@@ -167,20 +167,58 @@ export const STOPS: StopInfo[] = [
     operator: 'KMB',
     category: 'home',
   },
+  // 出九龍 (To Kowloon)
+  {
+    id: '7FB2AE7FA13EDB0F',
+    name: '香港黃金海岸 (Gold Coast)',
+    route: '61M',
+    bound: 'O',
+    operator: 'KMB',
+    category: 'kowloon',
+  },
+  {
+    id: '7FB2AE7FA13EDB0F',
+    name: '香港黃金海岸 (Gold Coast)',
+    route: '52X',
+    bound: 'O',
+    operator: 'KMB',
+    category: 'kowloon',
+  },
+  {
+    id: '20006914', // Golden Coast stop ID for 140M
+    name: '香港黃金海岸 (Gold Coast)',
+    route: '140M',
+    bound: '1',
+    operator: 'GMB',
+    category: 'kowloon',
+  },
+  {
+    id: '001890', // Golden Coast stop ID for 952
+    name: '香港黃金海岸 (Gold Coast)',
+    route: '952',
+    bound: 'O',
+    operator: 'CTB',
+    category: 'kowloon',
+  },
 ];
 
 export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, BusArrival[]>> {
   const now = new Date();
   const results: Record<string, BusArrival[]> = {};
 
-  // Group stops by operator and then by route (MTRB) or stopId (KMB)
+  // Group stops by operator
   const kmbStopIds = Array.from(new Set(stops.filter(s => s.operator === 'KMB').map(s => s.id)));
   const mtrbRoutes = Array.from(new Set(stops.filter(s => s.operator === 'MTRB').map(s => s.route)));
+  const ctbStops = stops.filter(s => s.operator === 'CTB');
+  const gmbStops = stops.filter(s => s.operator === 'GMB');
 
-  // Fetch KMB data in parallel (one request per unique stopId)
+  // Fetch KMB data
   const kmbPromises = kmbStopIds.map(async (stopId) => {
     try {
-      const response = await fetch(`/api/bus/kmb/${stopId}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(`/api/bus/kmb/${stopId}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
       const data: KMBETAResponse = await response.json();
       return { stopId, data: data.data || [] };
     } catch (error) {
@@ -189,14 +227,18 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
     }
   });
 
-  // Fetch MTRB data in parallel (one request per unique route)
+  // Fetch MTRB data
   const mtrbPromises = mtrbRoutes.map(async (route) => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       const response = await fetch('/api/bus/mtrb', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ routeName: route, language: 'zh' }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       const data: MTRBETAResponse = await response.json();
       return { route, data: data.busStop || [] };
     } catch (error) {
@@ -205,9 +247,46 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
     }
   });
 
-  const [kmbResults, mtrbResults] = await Promise.all([
+  // Fetch CTB data
+  const ctbPromises = ctbStops.map(async (stop) => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(`/api/bus/ctb/${stop.id}/${stop.route}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      const data = await response.json();
+      return { key: `${stop.id}-${stop.route}`, data: data.data || [] };
+    } catch (error) {
+      console.error(`CTB API Error for ${stop.route}:`, error);
+      return { key: `${stop.id}-${stop.route}`, data: [] };
+    }
+  });
+
+  // Fetch GMB data
+  const gmbPromises = gmbStops.map(async (stop) => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      // Map route names to GMB route IDs
+      const routeIdMap: Record<string, string> = {
+        '140M': '2004598'
+      };
+      const routeId = routeIdMap[stop.route] || stop.route;
+      const response = await fetch(`/api/bus/gmb/eta/${routeId}/${stop.id}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      const data = await response.json();
+      return { key: `${stop.id}-${stop.route}`, data: data.data || [] };
+    } catch (error) {
+      console.error(`GMB API Error for ${stop.route}:`, error);
+      return { key: `${stop.id}-${stop.route}`, data: [] };
+    }
+  });
+
+  const [kmbResults, mtrbResults, ctbResults, gmbResults] = await Promise.all([
     Promise.all(kmbPromises),
-    Promise.all(mtrbPromises)
+    Promise.all(mtrbPromises),
+    Promise.all(ctbPromises),
+    Promise.all(gmbPromises)
   ]);
 
   // Map results back to individual stops
@@ -236,7 +315,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
           remark: item.rmk_tc || '',
         };
       });
-    } else {
+    } else if (stop.operator === 'MTRB') {
       const routeData = mtrbResults.find(r => r.route === stop.route)?.data || [];
       const stopIdToMatch = stop.id.split(',')[0];
       const stopData = routeData.find((s) => s.busStopId === stopIdToMatch);
@@ -268,6 +347,44 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
           eta: item.departureTimeText || '',
           remainingMinutes: remainingMinutes >= 0 ? remainingMinutes : 0,
           remark: item.busRemark || '',
+        };
+      });
+    } else if (stop.operator === 'CTB') {
+      const stopData = ctbResults.find(r => r.key === key)?.data || [];
+      const filtered = stopData.filter((item: any) => item.dir === stop.bound || !stop.bound);
+      results[key] = filtered.map((item: any) => {
+        const etaDate = item.eta ? new Date(item.eta) : null;
+        const diff = etaDate ? Math.floor((etaDate.getTime() - now.getTime()) / 60000) : null;
+        return {
+          route: item.route,
+          destination: item.dest_tc,
+          eta: item.eta,
+          remainingMinutes: diff !== null && diff >= 0 ? diff : 0,
+          remark: item.rmk_tc || '',
+        };
+      });
+    } else if (stop.operator === 'GMB') {
+      const stopData = gmbResults.find(r => r.key === key)?.data || [];
+      // GMB API returns eta array inside data[0]
+      const etas: { timestamp: string; remark: string }[] = [];
+      
+      const targetSeqData = stop.bound ? stopData.find((d: any) => d.route_seq === Number(stop.bound)) : stopData[0];
+      
+      if (targetSeqData && targetSeqData.eta) {
+        targetSeqData.eta.forEach((item: any) => {
+          if (item.timestamp) etas.push({ timestamp: item.timestamp, remark: item.remarks_tc || '' });
+        });
+      }
+      
+      results[key] = etas.map((etaObj) => {
+        const etaDate = new Date(etaObj.timestamp);
+        const diff = Math.floor((etaDate.getTime() - now.getTime()) / 60000);
+        return {
+          route: stop.route,
+          destination: stop.route === '140M' ? '青衣站' : '未知',
+          eta: etaObj.timestamp,
+          remainingMinutes: diff >= 0 ? diff : 0,
+          remark: etaObj.remark,
         };
       });
     }

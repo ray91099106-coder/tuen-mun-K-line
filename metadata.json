@@ -1,5 +1,5 @@
 {
-  "name": "HK Bus ETA Tracker",
-  "description": "Real-time arrival information for KMB and MTR Bus routes, demonstrating multi-operator API integration.",
+  "name": "屯門 K-Line 巴士到站",
+  "description": "提供屯門區 K-Line、九巴、城巴及小巴的實時到站時間查詢。",
   "requestFramePermissions": []
 }

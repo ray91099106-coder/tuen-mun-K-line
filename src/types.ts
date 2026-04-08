@@ -16,8 +16,39 @@ export interface StopInfo {
   name: string;
   route: string;
   bound: string;
-  operator: 'KMB' | 'MTRB';
-  category?: 'home' | 'pinned' | 'others';
+  operator: 'KMB' | 'MTRB' | 'CTB' | 'GMB';
+  category?: 'home' | 'pinned' | 'others' | 'kowloon';
+}
+
+export interface CTBETAResponse {
+  data: Array<{
+    co: string;
+    route: string;
+    dir: string;
+    stop: string;
+    seq: number;
+    eta: string | null;
+    rmk_tc: string;
+    rmk_sc: string;
+    rmk_en: string;
+    data_timestamp: string;
+    dest_tc: string;
+    dest_sc: string;
+    dest_en: string;
+  }>;
+}
+
+export interface GMBETAResponse {
+  data: Array<{
+    index: number;
+    eta_curr: string;
+    eta_next: string;
+    eta_next2: string;
+    timestamp: string;
+    remark_tc: string;
+    remark_sc: string;
+    remark_en: string;
+  }>;
 }
 
 export interface KMBETAResponse {

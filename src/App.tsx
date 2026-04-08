@@ -15,6 +15,7 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [error, setError] = useState<string | null>(null);
   const [isHomeOpen, setIsHomeOpen] = useState<boolean>(false);
+  const [isKowloonOpen, setIsKowloonOpen] = useState<boolean>(false);
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
@@ -36,6 +37,7 @@ export default function App() {
     let interval: ReturnType<typeof setInterval>;
 
     const startTimer = () => {
+      if (interval) clearInterval(interval);
       interval = setInterval(() => {
         if (document.visibilityState === 'visible') {
           refreshAll();
@@ -48,7 +50,7 @@ export default function App() {
         refreshAll(); // Refresh immediately when coming back
         startTimer();
       } else {
-        clearInterval(interval);
+        if (interval) clearInterval(interval);
       }
     };
 
@@ -63,6 +65,7 @@ export default function App() {
 
   const pinnedStops = STOPS.filter(s => s.category === 'pinned');
   const homeStops = STOPS.filter(s => s.category === 'home');
+  const kowloonStops = STOPS.filter(s => s.category === 'kowloon');
 
   // Group home stops by virtual stop name
   const homeStopNames = ['新墟(往置樂方向)', '屯門站(往置樂方向)', '市中心(往置樂方向)', '華都(往置樂方向)'];
@@ -175,9 +178,9 @@ export default function App() {
 
   const renderHomeSection = () => (
     <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-      <button 
+      <div 
         onClick={() => setIsHomeOpen(!isHomeOpen)}
-        className="w-full p-4 border-b border-slate-100 bg-orange-500 text-white flex items-center justify-between hover:bg-orange-600 transition-colors"
+        className="w-full p-4 border-b border-slate-100 bg-orange-500 text-white flex items-center justify-between hover:bg-orange-600 transition-colors cursor-pointer"
       >
         <h2 className="text-lg font-bold flex items-center gap-2">
           <Bus className="w-5 h-5" />
@@ -187,7 +190,7 @@ export default function App() {
           {isHomeOpen && <RefreshControl />}
           {isHomeOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </div>
-      </button>
+      </div>
       
       <AnimatePresence>
         {isHomeOpen && (
@@ -205,17 +208,17 @@ export default function App() {
                     <h3 className="text-sm font-bold border-l-4 border-orange-500 pl-2 text-slate-700">
                       {stopName.split('(')[0]}
                     </h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                       {stopsInGroup.map((stop) => {
                         const arrival = arrivals[`${stop.id}-${stop.route}`]?.find(a => a.route === stop.route);
                         const styles = getHomeStyles(arrival?.remainingMinutes ?? null);
 
                         return (
-                          <div key={`${stop.id}-${stop.route}`} className={`bg-slate-50 border rounded-xl p-1.5 flex flex-col items-center shadow-sm transition-all ${styles.border}`}>
-                            <div className="flex items-center gap-1 mb-0.5">
-                              <span className="text-base font-black text-blue-700 leading-tight">{stop.route}</span>
+                          <div key={`${stop.id}-${stop.route}`} className={`bg-slate-50 border rounded-xl p-3 flex flex-col items-center shadow-sm transition-all ${styles.border}`}>
+                            <div className="flex items-center gap-1 mb-1">
+                              <span className="text-base font-black text-blue-700 leading-tight tracking-tight">{stop.route}</span>
                             </div>
-                            <div className="flex items-baseline gap-0.5">
+                            <div className="flex items-baseline gap-1">
                               {loading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
                                 <div className="w-6 h-4 bg-slate-200 animate-pulse rounded" />
                               ) : arrival ? (
@@ -243,6 +246,71 @@ export default function App() {
     </section>
   );
 
+  const renderKowloonSection = () => (
+    <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div 
+        onClick={() => setIsKowloonOpen(!isKowloonOpen)}
+        className="w-full p-4 border-b border-slate-100 bg-teal-600 text-white flex items-center justify-between hover:bg-teal-700 transition-colors cursor-pointer"
+      >
+        <h2 className="text-lg font-bold flex items-center gap-2">
+          <MapPin className="w-5 h-5" />
+          出九龍
+        </h2>
+        <div className="flex items-center gap-3">
+          {isKowloonOpen && <RefreshControl />}
+          {isKowloonOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </div>
+      </div>
+      
+      <AnimatePresence>
+        {isKowloonOpen && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="p-3 space-y-4">
+              <div className="space-y-1.5">
+                <h3 className="text-sm font-bold border-l-4 border-teal-600 pl-2 text-slate-700">
+                  香港黃金海岸 (Gold Coast)
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {kowloonStops.map((stop) => {
+                    const arrival = arrivals[`${stop.id}-${stop.route}`]?.find(a => a.route === stop.route);
+                    const styles = getHomeStyles(arrival?.remainingMinutes ?? null);
+
+                    return (
+                      <div key={`${stop.id}-${stop.route}`} className={`bg-slate-50 border rounded-xl p-3 flex flex-col items-center shadow-sm transition-all ${styles.border}`}>
+                        <div className="flex items-center gap-1 mb-1">
+                          <span className="text-base font-black text-blue-700 leading-tight tracking-tight">{stop.route}</span>
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                          {loading && (!arrivals[`${stop.id}-${stop.route}`]) ? (
+                            <div className="w-6 h-4 bg-slate-200 animate-pulse rounded" />
+                          ) : arrival ? (
+                            <>
+                              <span className={`text-base font-black leading-none ${styles.text}`}>
+                                {arrival.remainingMinutes}
+                              </span>
+                              <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                            </>
+                          ) : (
+                            <span className="text-[10px] text-slate-300 font-bold italic">暫無</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -254,15 +322,23 @@ export default function App() {
         )}
 
         {/* Stay on Top Logic */}
-        {isHomeOpen ? (
+        {isKowloonOpen ? (
+          <>
+            {renderKowloonSection()}
+            {renderHomeSection()}
+            {renderPinnedSection()}
+          </>
+        ) : isHomeOpen ? (
           <>
             {renderHomeSection()}
+            {renderKowloonSection()}
             {renderPinnedSection()}
           </>
         ) : (
           <>
             {renderPinnedSection()}
             {renderHomeSection()}
+            {renderKowloonSection()}
           </>
         )}
 
