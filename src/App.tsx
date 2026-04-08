@@ -86,6 +86,14 @@ export default function App() {
     return { text: 'text-slate-900', border: 'border-slate-100' };
   };
 
+  const getKowloonStyles = (mins: number | null) => {
+    if (mins === null) return { text: 'text-slate-300', border: 'border-slate-100' };
+    if (mins < 6) return { text: 'text-[#dc2626]', border: 'border-[#dc2626] border-2' }; // Red
+    if (mins >= 6 && mins <= 9) return { text: 'text-[#16a34a]', border: 'border-[#16a34a] border-2' }; // Green
+    if (mins > 9) return { text: 'text-[#808080]', border: 'border-slate-100' }; // Grey
+    return { text: 'text-slate-900', border: 'border-slate-100' };
+  };
+
   const RefreshControl = () => (
     <div className="flex items-center gap-3">
       <div className="text-right leading-tight">
@@ -278,7 +286,7 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-3">
                   {kowloonStops.map((stop) => {
                     const arrival = arrivals[`${stop.id}-${stop.route}`]?.find(a => a.route === stop.route);
-                    const styles = getHomeStyles(arrival?.remainingMinutes ?? null);
+                    const styles = getKowloonStyles(arrival?.remainingMinutes ?? null);
 
                     return (
                       <div key={`${stop.id}-${stop.route}`} className={`bg-slate-50 border rounded-xl p-3 flex flex-col items-center shadow-sm transition-all ${styles.border}`}>
