@@ -272,7 +272,10 @@ export default function App() {
             className="overflow-hidden"
           >
             <div className="p-3 space-y-4">
-              {homeStopNames.map((stopName) => {
+              {(nearestArea && homeStopNames.includes(nearestArea) 
+                ? [nearestArea, ...homeStopNames.filter(name => name !== nearestArea)] 
+                : homeStopNames
+              ).map((stopName) => {
                 const stopsInGroup = homeStops.filter(s => s.name === stopName);
                 const isNearest = nearestArea === stopName;
                 
@@ -378,28 +381,35 @@ export default function App() {
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
                   {kowloonStops.map((stop) => {
-                    const arrival = arrivals[`${stop.id}-${stop.route}`]?.find(a => a.route === stop.route);
-                    const styles = getKowloonStyles(arrival?.remainingMinutes ?? null);
+                    const stopArrivals = arrivals[`${stop.id}-${stop.route}`] || [];
+                    const displayArrivals = stopArrivals.slice(0, 2);
+                    const firstArrival = displayArrivals[0];
+                    const styles = getKowloonStyles(firstArrival?.remainingMinutes ?? null);
 
                     return (
                       <div key={`${stop.id}-${stop.route}`} className={`bg-slate-50 border rounded-xl p-3 flex flex-col items-center shadow-sm transition-all ${styles.border}`}>
                         <div className="flex items-center gap-1 mb-1">
                           <span className="text-base font-black text-blue-700 leading-tight tracking-tight">{stop.route}</span>
                         </div>
-                        <div className="flex items-baseline gap-1">
-                          {loading && (!arrivals[`${stop.id}-${stop.route}`]) ? (
-                            <div className="w-6 h-4 bg-slate-200 animate-pulse rounded" />
-                          ) : arrival ? (
-                            arrival.remainingMinutes !== null ? (
-                              <>
-                                <span className={`text-base font-black leading-none ${styles.text}`}>
-                                  {arrival.remainingMinutes}
-                                </span>
-                                <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
-                              </>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 font-bold">{arrival.remark || '暫無'}</span>
-                            )
+                        
+                        <div className="flex flex-col items-center gap-1 w-full">
+                          {loading && stopArrivals.length === 0 ? (
+                            <div className="w-12 h-6 bg-slate-200 animate-pulse rounded" />
+                          ) : displayArrivals.length > 0 ? (
+                            displayArrivals.map((arrival, idx) => (
+                              <div key={idx} className={`flex items-baseline gap-1 ${idx === 0 ? '' : 'opacity-60 border-t border-slate-200 w-full justify-center pt-1 mt-1'}`}>
+                                {arrival.remainingMinutes !== null ? (
+                                  <>
+                                    <span className={`${idx === 0 ? 'text-base' : 'text-sm'} font-black leading-none ${idx === 0 ? styles.text : 'text-slate-500'}`}>
+                                      {arrival.remainingMinutes}
+                                    </span>
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                                  </>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 font-bold">{arrival.remark || '暫無'}</span>
+                                )}
+                              </div>
+                            ))
                           ) : (
                             <span className="text-[10px] text-slate-300 font-bold italic">暫無</span>
                           )}
