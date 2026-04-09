@@ -276,13 +276,13 @@ export default function App() {
                 const stopsInGroup = homeStops.filter(s => s.name === stopName);
                 const isNearest = nearestArea === stopName;
                 
-                // Calculate walking time to this area (approx 80m/min)
+                // Calculate walking time to this area (approx 60m/min to account for non-straight paths)
                 let walkingMins = 0;
                 if (userLocation) {
                   const areaStop = stopsInGroup[0];
                   if (areaStop && areaStop.lat && areaStop.lng) {
                     const dist = calculateDistance(userLocation.lat, userLocation.lng, areaStop.lat, areaStop.lng);
-                    walkingMins = Math.ceil(dist / 80) + 1; // +1 min buffer
+                    walkingMins = Math.ceil(dist / 60) + 1; // +1 min buffer
                   }
                 }
 
