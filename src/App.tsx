@@ -16,6 +16,64 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [isHomeOpen, setIsHomeOpen] = useState<boolean>(false);
   const [isKowloonOpen, setIsKowloonOpen] = useState<boolean>(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [nearestArea, setNearestArea] = useState<string | null>(null);
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3; // metres
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // in metres
+  };
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+      },
+      (error) => console.error('Geolocation error:', error),
+      { enableHighAccuracy: true }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  useEffect(() => {
+    if (!userLocation) return;
+
+    const areas = [
+      { name: '新墟(往置樂方向)', lat: 22.3983, lng: 113.9753 },
+      { name: '屯門站(往置樂方向)', lat: 22.3946, lng: 113.9731 },
+      { name: '市中心(往置樂方向)', lat: 22.3913, lng: 113.9755 },
+      { name: '華都(往置樂方向)', lat: 22.3906, lng: 113.9789 }
+    ];
+
+    let minDistance = Infinity;
+    let closest = null;
+
+    areas.forEach(area => {
+      const dist = calculateDistance(userLocation.lat, userLocation.lng, area.lat, area.lng);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closest = area.name;
+      }
+    });
+
+    setNearestArea(closest);
+  }, [userLocation]);
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
@@ -80,9 +138,6 @@ export default function App() {
 
   const getHomeStyles = (mins: number | null) => {
     if (mins === null) return { text: 'text-slate-300', border: 'border-slate-100' };
-    if (mins >= 1 && mins <= 2) return { text: 'text-[#dc2626]', border: 'border-[#dc2626] border-2' }; // Red
-    if (mins >= 3 && mins <= 5) return { text: 'text-[#16a34a]', border: 'border-[#16a34a] border-2' }; // Green
-    if (mins > 5) return { text: 'text-[#808080]', border: 'border-slate-100' }; // Grey
     return { text: 'text-slate-900', border: 'border-slate-100' };
   };
 
@@ -137,12 +192,16 @@ export default function App() {
                   {loading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
                     <div className="w-8 h-4 bg-slate-200 animate-pulse rounded" />
                   ) : arrival ? (
-                    <div className="flex items-baseline gap-0.5">
-                      <span className={`text-lg font-black leading-none ${styles.text}`}>
-                        {arrival.remainingMinutes}
-                      </span>
-                      <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
-                    </div>
+                    arrival.remainingMinutes !== null ? (
+                      <div className="flex items-baseline gap-0.5">
+                        <span className={`text-lg font-black leading-none ${styles.text}`}>
+                          {arrival.remainingMinutes}
+                        </span>
+                        <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 font-bold">{arrival.remark || '暫無'}</span>
+                    )
                   ) : (
                     <span className="text-[10px] text-slate-300 font-bold italic">暫無</span>
                   )}
@@ -166,12 +225,16 @@ export default function App() {
                   {loading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
                     <div className="w-8 h-4 bg-slate-200 animate-pulse rounded" />
                   ) : arrival ? (
-                    <div className="flex items-baseline gap-0.5">
-                      <span className={`text-lg font-black ${styles.text}`}>
-                        {arrival.remainingMinutes}
-                      </span>
-                      <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
-                    </div>
+                    arrival.remainingMinutes !== null ? (
+                      <div className="flex items-baseline gap-0.5">
+                        <span className={`text-lg font-black ${styles.text}`}>
+                          {arrival.remainingMinutes}
+                        </span>
+                        <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 font-bold">{arrival.remark || '暫無'}</span>
+                    )
                   ) : (
                     <span className="text-[10px] text-slate-300 font-bold italic">暫無</span>
                   )}
@@ -211,31 +274,61 @@ export default function App() {
             <div className="p-3 space-y-4">
               {homeStopNames.map((stopName) => {
                 const stopsInGroup = homeStops.filter(s => s.name === stopName);
+                const isNearest = nearestArea === stopName;
+                
+                // Calculate walking time to this area (approx 80m/min)
+                let walkingMins = 0;
+                if (userLocation) {
+                  const areaStop = stopsInGroup[0];
+                  if (areaStop && areaStop.lat && areaStop.lng) {
+                    const dist = calculateDistance(userLocation.lat, userLocation.lng, areaStop.lat, areaStop.lng);
+                    walkingMins = Math.ceil(dist / 80) + 1; // +1 min buffer
+                  }
+                }
+
                 return (
-                  <div key={stopName} className="space-y-1.5">
-                    <h3 className="text-sm font-bold border-l-4 border-orange-500 pl-2 text-slate-700">
-                      {stopName.split('(')[0]}
-                    </h3>
+                  <div key={stopName} className={`space-y-1.5 p-2 rounded-xl transition-all ${isNearest ? 'bg-green-50 border-2 border-green-500' : ''}`}>
+                    <div className="flex items-center justify-between">
+                      <h3 className={`text-sm font-bold border-l-4 pl-2 ${isNearest ? 'border-green-600 text-green-700' : 'border-orange-500 text-slate-700'}`}>
+                        {stopName.split('(')[0]} {isNearest && <span className="text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded-full ml-1 animate-pulse">最近</span>}
+                      </h3>
+                      {isNearest && walkingMins > 0 && (
+                        <span className="text-[10px] font-bold text-slate-500 mr-2">
+                          步程約 {walkingMins} 分鐘
+                        </span>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                       {stopsInGroup.map((stop) => {
                         const arrival = arrivals[`${stop.id}-${stop.route}`]?.find(a => a.route === stop.route);
                         const styles = getHomeStyles(arrival?.remainingMinutes ?? null);
+                        
+                        // Check if can catch: walkingMins <= remainingMinutes <= walkingMins + 3
+                        const canCatch = arrival && 
+                                        arrival.remainingMinutes !== null && 
+                                        arrival.remainingMinutes >= walkingMins && 
+                                        arrival.remainingMinutes <= walkingMins + 3;
 
                         return (
-                          <div key={`${stop.id}-${stop.route}`} className={`bg-slate-50 border rounded-xl p-3 flex flex-col items-center shadow-sm transition-all ${styles.border}`}>
+                          <div key={`${stop.id}-${stop.route}`} className={`bg-white border rounded-xl p-3 flex flex-col items-center shadow-sm transition-all ${canCatch ? 'border-green-500 border-2 ring-2 ring-green-100' : styles.border}`}>
                             <div className="flex items-center gap-1 mb-1">
                               <span className="text-base font-black text-blue-700 leading-tight tracking-tight">{stop.route}</span>
+                              {canCatch && <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping" />}
                             </div>
                             <div className="flex items-baseline gap-1">
                               {loading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
                                 <div className="w-6 h-4 bg-slate-200 animate-pulse rounded" />
                               ) : arrival ? (
-                                <>
-                                  <span className={`text-base font-black leading-none ${styles.text}`}>
-                                    {arrival.remainingMinutes}
-                                  </span>
-                                  <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
-                                </>
+                                arrival.remainingMinutes !== null ? (
+                                  <>
+                                    <span className={`text-base font-black leading-none ${styles.text}`}>
+                                      {arrival.remainingMinutes}
+                                    </span>
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                                  </>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 font-bold">{arrival.remark || '暫無'}</span>
+                                )
                               ) : (
                                 <span className="text-[10px] text-slate-300 font-bold italic">暫無</span>
                               )}
@@ -297,12 +390,16 @@ export default function App() {
                           {loading && (!arrivals[`${stop.id}-${stop.route}`]) ? (
                             <div className="w-6 h-4 bg-slate-200 animate-pulse rounded" />
                           ) : arrival ? (
-                            <>
-                              <span className={`text-base font-black leading-none ${styles.text}`}>
-                                {arrival.remainingMinutes}
-                              </span>
-                              <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
-                            </>
+                            arrival.remainingMinutes !== null ? (
+                              <>
+                                <span className={`text-base font-black leading-none ${styles.text}`}>
+                                  {arrival.remainingMinutes}
+                                </span>
+                                <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                              </>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 font-bold">{arrival.remark || '暫無'}</span>
+                            )
                           ) : (
                             <span className="text-[10px] text-slate-300 font-bold italic">暫無</span>
                           )}

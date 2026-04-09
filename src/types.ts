@@ -18,6 +18,8 @@ export interface StopInfo {
   bound: string;
   operator: 'KMB' | 'MTRB' | 'CTB' | 'GMB';
   category?: 'home' | 'pinned' | 'others' | 'kowloon';
+  lat?: number;
+  lng?: number;
 }
 
 export interface CTBETAResponse {

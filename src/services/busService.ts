@@ -56,6 +56,8 @@ export const STOPS: StopInfo[] = [
     bound: 'U',
     operator: 'MTRB',
     category: 'home',
+    lat: 22.3983,
+    lng: 113.9753,
   },
   {
     id: 'K51A-U070,6',
@@ -64,6 +66,8 @@ export const STOPS: StopInfo[] = [
     bound: 'U',
     operator: 'MTRB',
     category: 'home',
+    lat: 22.3983,
+    lng: 113.9753,
   },
 
   // 回家 (Home) - 站點 2：屯門站
@@ -74,6 +78,8 @@ export const STOPS: StopInfo[] = [
     bound: 'U',
     operator: 'MTRB',
     category: 'home',
+    lat: 22.3946,
+    lng: 113.9731,
   },
   {
     id: 'K51A-U080,7',
@@ -82,6 +88,8 @@ export const STOPS: StopInfo[] = [
     bound: 'U',
     operator: 'MTRB',
     category: 'home',
+    lat: 22.3946,
+    lng: 113.9731,
   },
   {
     id: 'K53-U010,1',
@@ -90,6 +98,8 @@ export const STOPS: StopInfo[] = [
     bound: 'U',
     operator: 'MTRB',
     category: 'home',
+    lat: 22.3946,
+    lng: 113.9731,
   },
 
   // 回家 (Home) - 站點 3：市中心
@@ -100,6 +110,8 @@ export const STOPS: StopInfo[] = [
     bound: 'U',
     operator: 'MTRB',
     category: 'home',
+    lat: 22.3913,
+    lng: 113.9755,
   },
   {
     id: 'K51A-U090,8',
@@ -108,6 +120,8 @@ export const STOPS: StopInfo[] = [
     bound: 'U',
     operator: 'MTRB',
     category: 'home',
+    lat: 22.3913,
+    lng: 113.9755,
   },
   {
     id: 'K53-U020,1',
@@ -116,6 +130,8 @@ export const STOPS: StopInfo[] = [
     bound: 'U',
     operator: 'MTRB',
     category: 'home',
+    lat: 22.3913,
+    lng: 113.9755,
   },
   {
     id: '10DABE0380229B4D',
@@ -124,6 +140,8 @@ export const STOPS: StopInfo[] = [
     bound: 'O',
     operator: 'KMB',
     category: 'home',
+    lat: 22.3913,
+    lng: 113.9755,
   },
 
   // 回家 (Home) - 站點 4：華都
@@ -134,6 +152,8 @@ export const STOPS: StopInfo[] = [
     bound: 'U',
     operator: 'MTRB',
     category: 'home',
+    lat: 22.3906,
+    lng: 113.9789,
   },
   {
     id: 'K51A-U100,9',
@@ -142,6 +162,8 @@ export const STOPS: StopInfo[] = [
     bound: 'U',
     operator: 'MTRB',
     category: 'home',
+    lat: 22.3906,
+    lng: 113.9789,
   },
   {
     id: 'K53-U030,2',
@@ -150,6 +172,8 @@ export const STOPS: StopInfo[] = [
     bound: 'U',
     operator: 'MTRB',
     category: 'home',
+    lat: 22.3906,
+    lng: 113.9789,
   },
   {
     id: '1E15CFA82F408124',
@@ -158,6 +182,8 @@ export const STOPS: StopInfo[] = [
     bound: 'O',
     operator: 'KMB',
     category: 'home',
+    lat: 22.3906,
+    lng: 113.9789,
   },
   {
     id: '1E15CFA82F408124',
@@ -166,6 +192,8 @@ export const STOPS: StopInfo[] = [
     bound: 'O',
     operator: 'KMB',
     category: 'home',
+    lat: 22.3906,
+    lng: 113.9789,
   },
   // 出九龍 (To Kowloon)
   {
@@ -215,10 +243,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
   // Fetch KMB data
   const kmbPromises = kmbStopIds.map(async (stopId) => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      const response = await fetch(`/api/bus/kmb/${stopId}`, { signal: controller.signal });
-      clearTimeout(timeoutId);
+      const response = await fetch(`/api/bus/kmb/${stopId}`);
       const data: KMBETAResponse = await response.json();
       return { stopId, data: data.data || [] };
     } catch (error) {
@@ -230,15 +255,11 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
   // Fetch MTRB data
   const mtrbPromises = mtrbRoutes.map(async (route) => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
       const response = await fetch('/api/bus/mtrb', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ routeName: route, language: 'zh' }),
-        signal: controller.signal,
       });
-      clearTimeout(timeoutId);
       const data: MTRBETAResponse = await response.json();
       return { route, data: data.busStop || [] };
     } catch (error) {
@@ -250,10 +271,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
   // Fetch CTB data
   const ctbPromises = ctbStops.map(async (stop) => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      const response = await fetch(`/api/bus/ctb/${stop.id}/${stop.route}`, { signal: controller.signal });
-      clearTimeout(timeoutId);
+      const response = await fetch(`/api/bus/ctb/${stop.id}/${stop.route}`);
       const data = await response.json();
       return { key: `${stop.id}-${stop.route}`, data: data.data || [] };
     } catch (error) {
@@ -265,15 +283,12 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
   // Fetch GMB data
   const gmbPromises = gmbStops.map(async (stop) => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
       // Map route names to GMB route IDs
       const routeIdMap: Record<string, string> = {
         '140M': '2004598'
       };
       const routeId = routeIdMap[stop.route] || stop.route;
-      const response = await fetch(`/api/bus/gmb/eta/${routeId}/${stop.id}`, { signal: controller.signal });
-      clearTimeout(timeoutId);
+      const response = await fetch(`/api/bus/gmb/eta/${routeId}/${stop.id}`);
       const data = await response.json();
       return { key: `${stop.id}-${stop.route}`, data: data.data || [] };
     } catch (error) {
@@ -311,7 +326,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
           route: item.route,
           destination: item.dest_tc,
           eta: item.eta,
-          remainingMinutes: diff !== null && diff >= 0 ? diff : 0,
+          remainingMinutes: diff !== null ? Math.max(0, diff) : null,
           remark: item.rmk_tc || '',
         };
       });
@@ -328,9 +343,9 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
       results[key] = stopData.bus.map((item) => {
         let remainingMinutes = item.departureTimeInSecond 
           ? Math.floor(parseInt(item.departureTimeInSecond) / 60) 
-          : 0;
+          : null;
         
-        if (stop.route === 'K51') {
+        if (remainingMinutes !== null && stop.route === 'K51') {
           if (stop.id === 'K51-U070,6' || stop.id === 'K51-U080,7') {
             remainingMinutes = Math.max(0, remainingMinutes - 2);
           }
@@ -345,7 +360,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
           route: stop.route,
           destination,
           eta: item.departureTimeText || '',
-          remainingMinutes: remainingMinutes >= 0 ? remainingMinutes : 0,
+          remainingMinutes: remainingMinutes !== null ? Math.max(0, remainingMinutes) : null,
           remark: item.busRemark || '',
         };
       });
@@ -359,7 +374,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
           route: item.route,
           destination: item.dest_tc,
           eta: item.eta,
-          remainingMinutes: diff !== null && diff >= 0 ? diff : 0,
+          remainingMinutes: diff !== null ? Math.max(0, diff) : null,
           remark: item.rmk_tc || '',
         };
       });
@@ -383,7 +398,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
           route: stop.route,
           destination: stop.route === '140M' ? '青衣站' : '未知',
           eta: etaObj.timestamp,
-          remainingMinutes: diff >= 0 ? diff : 0,
+          remainingMinutes: Math.max(0, diff),
           remark: etaObj.remark,
         };
       });
