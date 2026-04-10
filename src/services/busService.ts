@@ -228,6 +228,23 @@ export const STOPS: StopInfo[] = [
     operator: 'CTB',
     category: 'kowloon',
   },
+  // 深圳灣口岸 (Shenzhen Bay Port)
+  {
+    id: '003208',
+    name: '深圳灣口岸 (Shenzhen Bay Port)',
+    route: 'B3X',
+    bound: '',
+    operator: 'CTB',
+    category: 'shenzhen',
+  },
+  {
+    id: '003208',
+    name: '深圳灣口岸 (Shenzhen Bay Port)',
+    route: 'B3',
+    bound: '',
+    operator: 'CTB',
+    category: 'shenzhen',
+  },
 ];
 
 export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, BusArrival[]>> {

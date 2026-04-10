@@ -17,7 +17,7 @@ export interface StopInfo {
   route: string;
   bound: string;
   operator: 'KMB' | 'MTRB' | 'CTB' | 'GMB';
-  category?: 'home' | 'pinned' | 'others' | 'kowloon';
+  category?: 'home' | 'pinned' | 'others' | 'kowloon' | 'shenzhen';
   lat?: number;
   lng?: number;
 }
