@@ -293,7 +293,7 @@ export default function App() {
                   const areaStop = stopsInGroup[0];
                   if (areaStop && areaStop.lat && areaStop.lng) {
                     const dist = calculateDistance(userLocation.lat, userLocation.lng, areaStop.lat, areaStop.lng);
-                    walkingMins = Math.ceil(dist / 60) + 1; // +1 min buffer
+                    walkingMins = Math.round(dist / 60);
                   }
                 }
 
@@ -303,9 +303,9 @@ export default function App() {
                       <h3 className={`text-sm font-bold border-l-4 pl-2 ${isNearest ? 'border-green-600 text-green-700' : 'border-orange-500 text-slate-700'}`}>
                         {stopName.split('(')[0]} {isNearest && <span className="text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded-full ml-1 animate-pulse">最近</span>}
                       </h3>
-                      {isNearest && walkingMins > 0 && (
+                      {isNearest && walkingMins >= 0 && (
                         <span className="text-[10px] font-bold text-slate-500 mr-2">
-                          步程約 {walkingMins} 分鐘
+                          {walkingMins === 0 ? '已到達巴士站' : `步程約 ${walkingMins} 分鐘`}
                         </span>
                       )}
                     </div>
