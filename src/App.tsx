@@ -19,6 +19,7 @@ export default function App() {
   const [isShenzhenOpen, setIsShenzhenOpen] = useState<boolean>(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [nearestArea, setNearestArea] = useState<string | null>(null);
+  const [hasAutoOpened, setHasAutoOpened] = useState<boolean>(false);
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371e3; // metres
@@ -64,6 +65,7 @@ export default function App() {
 
     let minDistance = Infinity;
     let closest = null;
+    let shouldAutoOpen = false;
 
     areas.forEach(area => {
       const dist = calculateDistance(userLocation.lat, userLocation.lng, area.lat, area.lng);
@@ -71,10 +73,22 @@ export default function App() {
         minDistance = dist;
         closest = area.name;
       }
+
+      // Check if any station is within 10 minutes walking dist (approx 600m)
+      if (!hasAutoOpened && Math.round(dist / 60) <= 10) {
+        shouldAutoOpen = true;
+      }
     });
 
     setNearestArea(closest);
-  }, [userLocation]);
+
+    if (shouldAutoOpen && !hasAutoOpened) {
+      setIsHomeOpen(true);
+      setIsKowloonOpen(false);
+      setIsShenzhenOpen(false);
+      setHasAutoOpened(true);
+    }
+  }, [userLocation, hasAutoOpened]);
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
