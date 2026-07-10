@@ -198,28 +198,40 @@ export default function App() {
         <div className="grid grid-cols-3 gap-2">
           {['K51', 'K53', 'K51A'].map(route => {
             const stop = pinnedStops.find(s => s.route === route);
-            const arrival = stop ? arrivals[`${stop.id}-${stop.route}`]?.find(a => a.route === route) : null;
+            const routeArrivals = stop ? arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === route) || [] : [];
+            const arrival = routeArrivals[0] || null;
+            const nextArrival = (route === 'K51' || route === 'K53') ? routeArrivals[1] || null : null;
             const styles = getPinnedStyles(arrival?.remainingMinutes ?? null);
             
             return (
               <div key={route} className={`flex flex-col items-center p-2 bg-slate-50 rounded-xl border shadow-sm transition-all ${styles.border}`}>
                 <span className="text-base font-black text-blue-700 leading-tight">{route}</span>
-                <div className="mt-0.5">
+                <div className="mt-0.5 w-full">
                   {loading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
-                    <div className="w-8 h-4 bg-slate-200 animate-pulse rounded" />
+                    <div className="w-8 h-4 bg-slate-200 animate-pulse rounded mx-auto" />
                   ) : arrival ? (
                     arrival.remainingMinutes !== null ? (
-                      <div className="flex items-baseline gap-0.5">
-                        <span className={`text-lg font-black leading-none ${styles.text}`}>
-                          {arrival.remainingMinutes}
-                        </span>
-                        <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                      <div className="flex flex-col items-center w-full">
+                        <div className="flex items-baseline gap-0.5">
+                          <span className={`text-lg font-black leading-none ${styles.text}`}>
+                            {arrival.remainingMinutes}
+                          </span>
+                          <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                        </div>
+                        {nextArrival && nextArrival.remainingMinutes !== null && (
+                          <div className="flex items-baseline gap-0.5 opacity-60 border-t border-slate-200 w-full justify-center pt-1 mt-1">
+                            <span className="text-sm font-black leading-none text-slate-500">
+                              {nextArrival.remainingMinutes}
+                            </span>
+                            <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                          </div>
+                        )}
                       </div>
                     ) : (
-                      <span className="text-[10px] text-slate-400 font-bold">{arrival.remark || '暫無'}</span>
+                      <span className="text-[10px] text-slate-400 font-bold block text-center">{arrival.remark || '暫無'}</span>
                     )
                   ) : (
-                    <span className="text-[10px] text-slate-300 font-bold italic">暫無</span>
+                    <span className="text-[10px] text-slate-300 font-bold italic block text-center">暫無</span>
                   )}
                 </div>
               </div>
