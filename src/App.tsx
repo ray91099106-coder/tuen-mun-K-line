@@ -39,18 +39,47 @@ export default function App() {
   useEffect(() => {
     if (!navigator.geolocation) return;
 
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        setUserLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        });
-      },
-      (error) => console.error('Geolocation error:', error),
-      { enableHighAccuracy: true }
-    );
+    let watchId: number | null = null;
 
-    return () => navigator.geolocation.clearWatch(watchId);
+    const startWatching = () => {
+      if (watchId !== null) return;
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => console.error('Geolocation error:', error),
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
+      );
+    };
+
+    const stopWatching = () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        startWatching();
+      } else {
+        stopWatching();
+      }
+    };
+
+    if (document.visibilityState === 'visible') {
+      startWatching();
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      stopWatching();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {
