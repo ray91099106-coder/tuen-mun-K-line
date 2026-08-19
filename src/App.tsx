@@ -42,25 +42,61 @@ export default function App() {
 
     let watchId: number | null = null;
 
+    // Suppress uncatchable browser geolocation errors from bubbling up to the preview overlay
+    const errorHandler = (e: ErrorEvent) => {
+      if (e.message && e.message.toLowerCase().includes('geolocation')) {
+        e.preventDefault();
+        e.stopPropagation();
+        setLocationError('無法獲取目前位置，步程計算暫時無法使用。');
+      }
+    };
+    
+    const rejectionHandler = (e: PromiseRejectionEvent) => {
+      if (e.reason && e.reason.message && e.reason.message.toLowerCase().includes('geolocation')) {
+        e.preventDefault();
+        e.stopPropagation();
+        setLocationError('無法獲取目前位置，步程計算暫時無法使用。');
+      }
+    };
+
+    window.addEventListener('error', errorHandler, true);
+    window.addEventListener('unhandledrejection', rejectionHandler, true);
+
     const startWatching = () => {
       if (watchId !== null) return;
-      watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-          setLocationError(null);
-        },
-        (error) => {
-          if (error.code === 1) {
-            setLocationError('請允許位置存取權限以啟用步程計算功能。');
-          } else {
-            setLocationError('無法獲取目前位置，步程計算暫時無法使用。');
-          }
-        },
-        { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
-      );
+      try {
+        watchId = navigator.geolocation.watchPosition(
+          (position) => {
+            try {
+              setUserLocation({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+              });
+              setLocationError(null);
+            } catch (e) {
+              // Ignore
+            }
+          },
+          (error) => {
+            try {
+              if (error && error.code === 1) {
+                setLocationError('請允許位置存取權限以啟用步程計算功能。');
+              } else {
+                setLocationError('無法獲取目前位置，步程計算暫時無法使用。');
+              }
+            } catch (e) {
+              // Ignore inner errors
+            }
+          },
+          { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
+        );
+      } catch (err) {
+        try {
+          setLocationError('無法獲取目前位置，步程計算暫時無法使用。');
+        } catch (e) {
+          // Ignore
+        }
+      }
     };
 
     const stopWatching = () => {
@@ -87,6 +123,8 @@ export default function App() {
     return () => {
       stopWatching();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('error', errorHandler, true);
+      window.removeEventListener('unhandledrejection', rejectionHandler, true);
     };
   }, []);
 

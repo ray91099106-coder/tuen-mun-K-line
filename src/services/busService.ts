@@ -260,7 +260,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
   // Fetch KMB data
   const kmbPromises = kmbStopIds.map(async (stopId) => {
     try {
-      const response = await fetch(`/api/bus/kmb/${stopId}`);
+      const response = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${stopId}`);
       const data: KMBETAResponse = await response.json();
       return { stopId, data: data.data || [] };
     } catch (error) {
@@ -272,7 +272,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
   // Fetch MTRB data
   const mtrbPromises = mtrbRoutes.map(async (route) => {
     try {
-      const response = await fetch('/api/bus/mtrb', {
+      const response = await fetch('https://rt.data.gov.hk/v1/transport/mtr/bus/getSchedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ routeName: route, language: 'zh' }),
@@ -288,7 +288,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
   // Fetch CTB data
   const ctbPromises = ctbStops.map(async (stop) => {
     try {
-      const response = await fetch(`/api/bus/ctb/${stop.id}/${stop.route}`);
+      const response = await fetch(`https://rt.data.gov.hk/v1/transport/citybus-nwfb/eta/CTB/${stop.id}/${stop.route}`);
       const data = await response.json();
       return { key: `${stop.id}-${stop.route}`, data: data.data || [] };
     } catch (error) {
@@ -305,7 +305,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
         '140M': '2004598'
       };
       const routeId = routeIdMap[stop.route] || stop.route;
-      const response = await fetch(`/api/bus/gmb/eta/${routeId}/${stop.id}`);
+      const response = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/${routeId}/${stop.id}`);
       const data = await response.json();
       return { key: `${stop.id}-${stop.route}`, data: data.data || [] };
     } catch (error) {
