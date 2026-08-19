@@ -14,6 +14,7 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [error, setError] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [isHomeOpen, setIsHomeOpen] = useState<boolean>(false);
   const [isKowloonOpen, setIsKowloonOpen] = useState<boolean>(false);
   const [isShenzhenOpen, setIsShenzhenOpen] = useState<boolean>(false);
@@ -49,8 +50,15 @@ export default function App() {
             lat: position.coords.latitude,
             lng: position.coords.longitude
           });
+          setLocationError(null);
         },
-        (error) => console.error('Geolocation error:', error),
+        (error) => {
+          if (error.code === 1) {
+            setLocationError('請允許位置存取權限以啟用步程計算功能。');
+          } else {
+            setLocationError('無法獲取目前位置，步程計算暫時無法使用。');
+          }
+        },
         { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
       );
     };
@@ -584,6 +592,12 @@ export default function App() {
           <div className="bg-red-50 border border-red-100 p-4 rounded-xl flex items-center gap-3 text-red-700">
             <AlertCircle className="w-5 h-5" />
             <p>{error}</p>
+          </div>
+        )}
+        {locationError && (
+          <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl flex items-center gap-3 text-amber-700">
+            <MapPin className="w-5 h-5" />
+            <p className="text-sm">{locationError}</p>
           </div>
         )}
 
