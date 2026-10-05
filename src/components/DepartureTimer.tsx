@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Clock, Bell, Volume2, AlertTriangle, X, ExternalLink, HelpCircle, CheckCircle2, Play, Sparkles } from 'lucide-react';
+import { Clock, Bell, Volume2, AlertTriangle, X, ExternalLink, HelpCircle, CheckCircle2, Play, Sparkles, Smartphone } from 'lucide-react';
 import { playStartChime, playAlarmSound, stopAlarmSound, requestScreenWakeLock, releaseScreenWakeLock } from '../services/timerSound';
 
 interface RouteArrivalInfo {
@@ -23,7 +23,6 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
   earliestRoute,
   earliestMinutes,
   availableRoutes = [],
-  selectedRouteTrigger = null,
 }) => {
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
@@ -31,6 +30,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
   const [activeRoute, setActiveRoute] = useState<string>('');
   const [isAlarmActive, setIsAlarmActive] = useState<boolean>(false);
   const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
+  const [showShortcutPromptModal, setShowShortcutPromptModal] = useState<boolean>(false);
   const [lastTriggerMode, setLastTriggerMode] = useState<'normal' | 'test'>('normal');
 
   const timerRef = useRef<number | null>(null);
@@ -45,6 +45,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
     }
   };
 
+  // Start web timer immediately without jumping out of browser
   const startTimer = (mins: number, route: string, isTest = false) => {
     const totalSecs = isTest ? 10 : Math.max(1, mins * 60);
     
@@ -58,11 +59,6 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
     setIsRunning(true);
     setIsAlarmActive(false);
     setLastTriggerMode(isTest ? 'test' : 'normal');
-
-    if (!isTest) {
-      // Try opening iOS Shortcut simultaneously
-      triggerIosShortcut(mins);
-    }
   };
 
   const cancelTimer = () => {
@@ -171,7 +167,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
             <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
               <span className="text-xs font-bold uppercase tracking-wider text-blue-100">
-                {lastTriggerMode === 'test' ? '測試倒數進行中' : `【${activeRoute}】出門提醒倒數中`}
+                {lastTriggerMode === 'test' ? '⚡ 測試倒數進行中' : `⏳【${activeRoute}】出門提醒倒數中`}
               </span>
             </div>
             <button
@@ -188,17 +184,17 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
                 {formatTime(remainingSeconds)}
               </div>
               <p className="text-xs text-blue-200 mt-0.5">
-                {lastTriggerMode === 'test' ? '10秒後測試響鈴' : '倒數完畢時（距到站8分鐘）手機將會響鈴'}
+                {lastTriggerMode === 'test' ? '10 秒後將在手機響鈴' : '倒數結束時（距到站 8 分鐘）手機將發出響鈴'}
               </p>
             </div>
             
             <button
-              onClick={() => triggerIosShortcut(Math.ceil(remainingSeconds / 60))}
+              onClick={() => setShowShortcutPromptModal(true)}
               className="px-3 py-2 bg-white text-blue-800 font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 hover:bg-blue-50 active:scale-95 transition-all cursor-pointer"
-              title="喚醒 iPhone 系統計時器以支援鎖定螢幕"
+              title="同步到 iPhone 系統計時器以支援鎖定螢幕"
             >
-              <ExternalLink className="w-3.5 h-3.5" />
-              iPhone 原生計時
+              <Smartphone className="w-3.5 h-3.5" />
+              iPhone 系統計時
             </button>
           </div>
 
@@ -208,6 +204,19 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
               className="bg-emerald-400 h-full rounded-full transition-all duration-1000 ease-linear"
               style={{ width: `${progressPercent}%` }}
             />
+          </div>
+          
+          <div className="mt-2 text-[11px] text-blue-200/80 flex items-center justify-between">
+            <span>✨ 螢幕防休眠保持開啟中，時間到時網頁會響鈴</span>
+            <button 
+              onClick={() => {
+                playAlarmSound();
+                setTimeout(() => stopAlarmSound(), 2000);
+              }}
+              className="underline hover:text-white"
+            >
+              測試聲音
+            </button>
           </div>
         </div>
       ) : (
@@ -245,7 +254,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
                     <p className="text-sm font-black text-slate-800">
                       首班車【<span className="text-blue-700 font-black">{earliestRoute}</span>】預計 <span className="text-red-600 font-black">{earliestMinutes} 分鐘</span> 後到達。
                       <span className="font-normal text-xs text-slate-600 block sm:inline sm:ml-1">
-                        點擊下方按鈕開始倒數 <strong className="text-amber-900 font-bold">{targetCountdownMinutes} 分鐘</strong>，於距到站 8 分鐘時響鈴出門！
+                        點擊開始倒數 <strong className="text-amber-900 font-bold">{targetCountdownMinutes} 分鐘</strong>，於距到站 8 分鐘時響鈴出門！
                       </span>
                     </p>
                   ) : earliestMinutes !== null && earliestRoute ? (
@@ -330,7 +339,65 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
         </div>
       )}
 
-      {/* 4. iOS Shortcuts Setup Instructions Modal */}
+      {/* 4. iPhone Shortcuts Sync Confirmation Modal */}
+      {showShortcutPromptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Smartphone className="w-5 h-5 text-blue-600" />
+                <h3 className="font-black text-slate-900 text-base">啟動 iPhone 系統計時器</h3>
+              </div>
+              <button
+                onClick={() => setShowShortcutPromptModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              這會將倒數（約 <strong>{Math.ceil(remainingSeconds / 60)} 分鐘</strong>）同步到 iPhone 內建時鐘。
+              <br /><br />
+              <strong className="text-amber-700 bg-amber-50 p-2 rounded-lg block border border-amber-200">
+                ⚠️ 注意：iPhone 要求你的「捷徑」App 內必須先存在一個名為「巴士提醒」的捷徑。
+              </strong>
+            </p>
+
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={() => {
+                  setShowShortcutPromptModal(false);
+                  triggerIosShortcut(Math.ceil(remainingSeconds / 60));
+                }}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                我已建立「巴士提醒」捷徑，立即啟動
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowShortcutPromptModal(false);
+                  setShowHelpModal(true);
+                }}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
+              >
+                教我如何 10 秒建立捷徑
+              </button>
+
+              <button
+                onClick={() => setShowShortcutPromptModal(false)}
+                className="w-full py-2 text-slate-400 hover:text-slate-600 font-medium text-xs transition-all cursor-pointer"
+              >
+                留在網頁倒數即可（螢幕常亮也會響鈴）
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. iOS Shortcuts Setup Instructions Modal */}
       {showHelpModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
