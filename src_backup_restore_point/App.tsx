@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bus, Clock, RefreshCw, MapPin, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { BusArrival, StopInfo } from './types';
 import { fetchAllETA, STOPS } from './services/busService';
-import { DepartureTimer } from './components/DepartureTimer';
 
 export default function App() {
   const [arrivals, setArrivals] = useState<Record<string, BusArrival[]>>({});
@@ -39,7 +38,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+    if (!navigator.geolocation) return;
 
     let watchId: number | null = null;
 
@@ -47,16 +46,16 @@ export default function App() {
     const errorHandler = (e: ErrorEvent) => {
       if (e.message && e.message.toLowerCase().includes('geolocation')) {
         e.preventDefault();
-        e.stopImmediatePropagation();
-        setLocationError(null);
+        e.stopPropagation();
+        setLocationError('無法獲取目前位置，步程計算暫時無法使用。');
       }
     };
     
     const rejectionHandler = (e: PromiseRejectionEvent) => {
-      if (e.reason && String(e.reason.message || e.reason).toLowerCase().includes('geolocation')) {
+      if (e.reason && e.reason.message && e.reason.message.toLowerCase().includes('geolocation')) {
         e.preventDefault();
-        e.stopImmediatePropagation();
-        setLocationError(null);
+        e.stopPropagation();
+        setLocationError('無法獲取目前位置，步程計算暫時無法使用。');
       }
     };
 
@@ -69,43 +68,40 @@ export default function App() {
         watchId = navigator.geolocation.watchPosition(
           (position) => {
             try {
-              if (position?.coords) {
-                setUserLocation({
-                  lat: position.coords.latitude,
-                  lng: position.coords.longitude
-                });
-                setLocationError(null);
-              }
+              setUserLocation({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+              });
+              setLocationError(null);
             } catch (e) {
               // Ignore
             }
           },
           (error) => {
-            // Stop watching if position is unavailable to prevent continuous browser error events
-            if (watchId !== null && (error?.code === 2 || error?.code === 1)) {
-              try {
-                navigator.geolocation.clearWatch(watchId);
-              } catch (e) {}
-              watchId = null;
-            }
-            if (error?.code === 1) {
-              setLocationError('請允許位置存取權限以啟用步程計算功能。');
-            } else {
-              setLocationError(null);
+            try {
+              if (error && error.code === 1) {
+                setLocationError('請允許位置存取權限以啟用步程計算功能。');
+              } else {
+                setLocationError('無法獲取目前位置，步程計算暫時無法使用。');
+              }
+            } catch (e) {
+              // Ignore inner errors
             }
           },
-          { enableHighAccuracy: false, maximumAge: 30000, timeout: 8000 }
+          { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
         );
       } catch (err) {
-        // Suppress
+        try {
+          setLocationError('無法獲取目前位置，步程計算暫時無法使用。');
+        } catch (e) {
+          // Ignore
+        }
       }
     };
 
     const stopWatching = () => {
       if (watchId !== null) {
-        try {
-          navigator.geolocation.clearWatch(watchId);
-        } catch (e) {}
+        navigator.geolocation.clearWatch(watchId);
         watchId = null;
       }
     };
@@ -220,24 +216,6 @@ export default function App() {
   const kowloonStops = STOPS.filter(s => s.category === 'kowloon');
   const shenzhenStops = STOPS.filter(s => s.category === 'shenzhen');
 
-  // Find earliest arrival among pinned routes ('往屯門')
-  const earliestPinnedArrival = useMemo(() => {
-    let best: { route: string; minutes: number } | null = null;
-    const targetRoutes = ['K51', 'K53', 'K51A', '61M', '52X'];
-    for (const route of targetRoutes) {
-      const stop = pinnedStops.find(s => s.route === route);
-      if (!stop) continue;
-      const routeArrivals = arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === route) || [];
-      const first = routeArrivals[0];
-      if (first && first.remainingMinutes !== null && first.remainingMinutes >= 0) {
-        if (!best || first.remainingMinutes < best.minutes) {
-          best = { route, minutes: first.remainingMinutes };
-        }
-      }
-    }
-    return best;
-  }, [arrivals, pinnedStops]);
-
   // Group home stops by virtual stop name
   const homeStopNames = ['新墟(往置樂方向)', '屯門站(往置樂方向)', '市中心(往置樂方向)', '華都(往置樂方向)'];
 
@@ -291,12 +269,6 @@ export default function App() {
         {!isHomeOpen ? <RefreshControl /> : <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">置頂路線</span>}
       </div>
       <div className="p-4 space-y-4">
-        {/* Departure Timer Widget for 往屯門 (Only shows button if earliest bus > 8 mins) */}
-        <DepartureTimer
-          earliestRoute={earliestPinnedArrival?.route ?? null}
-          earliestMinutes={earliestPinnedArrival?.minutes ?? null}
-        />
-
         {/* Row 1: MTRB K-Routes */}
         <div className="grid grid-cols-3 gap-2">
           {['K51', 'K53', 'K51A'].map(route => {

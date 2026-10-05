@@ -5,6 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>屯門 K-Line 巴士到站</title>
+    <script>
+      // Suppress uncatchable browser geolocation errors in headless / preview sandbox
+      window.addEventListener('error', function(e) {
+        if (e && (
+          (e.message && e.message.toLowerCase().includes('geolocation')) ||
+          (e.error && String(e.error).toLowerCase().includes('geolocation'))
+        )) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return true;
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(e) {
+        if (e && e.reason && String(e.reason.message || e.reason).toLowerCase().includes('geolocation')) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      }, true);
+    </script>
   </head>
   <body>
     <div id="root"></div>
