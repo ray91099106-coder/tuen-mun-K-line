@@ -4,6 +4,7 @@
 
 let audioCtx: AudioContext | null = null;
 let alarmInterval: number | null = null;
+let alarmTimeout: number | null = null;
 let wakeLockSentinel: any = null;
 
 // Ensure AudioContext is initialized/resumed on user gesture
@@ -54,7 +55,8 @@ export function playStartChime() {
 }
 
 // Play distinctive repeated alarm chime (880Hz / 1046Hz high-pitch bell)
-export function playAlarmSound() {
+// Automatically shuts off after durationSeconds (default 15s) to avoid playing unattended
+export function playAlarmSound(durationSeconds: number = 15) {
   const ctx = initAudio();
   stopAlarmSound(); // Clear any existing
 
@@ -114,12 +116,23 @@ export function playAlarmSound() {
   playSingleBell();
   // Repeat every 1.2 seconds until stopped
   alarmInterval = window.setInterval(playSingleBell, 1200);
+
+  // Auto-stop alarm after 15 seconds to prevent continuous ringing when unattended
+  if (durationSeconds > 0) {
+    alarmTimeout = window.setTimeout(() => {
+      stopAlarmSound();
+    }, durationSeconds * 1000);
+  }
 }
 
 export function stopAlarmSound() {
   if (alarmInterval !== null) {
     clearInterval(alarmInterval);
     alarmInterval = null;
+  }
+  if (alarmTimeout !== null) {
+    clearTimeout(alarmTimeout);
+    alarmTimeout = null;
   }
 }
 

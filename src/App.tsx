@@ -22,6 +22,140 @@ export default function App() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [nearestArea, setNearestArea] = useState<string | null>(null);
   const [hasAutoOpened, setHasAutoOpened] = useState<boolean>(false);
+  const [timerTrigger, setTimerTrigger] = useState<{ 
+    route: string; 
+    minutes: number; 
+    isNextBus?: boolean; 
+    originalMinutes?: number; 
+    timestamp: number 
+  } | null>(null);
+  const [activeTimerRoute, setActiveTimerRoute] = useState<string | null>(null);
+  const [leadMinutes, setLeadMinutes] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('bus_reminder_lead_minutes');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if ([7, 8, 9].includes(parsed)) return parsed;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return 8;
+  });
+
+  const [kowloonLeadMinutes, setKowloonLeadMinutes] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('bus_reminder_lead_minutes_kowloon');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if ([6, 7, 8].includes(parsed)) return parsed;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return 7; // Default is 7 minutes for Kowloon
+  });
+
+  const handleTriggerRouteTimer = (route: string, clickedArrivalMinutes?: number | null) => {
+    const stop = pinnedStops.find(s => s.route === route);
+    const routeArrivals = stop ? arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === route) || [] : [];
+    const first = routeArrivals[0];
+
+    // If caller explicitly clicked a minute that is > leadMinutes, use it
+    if (clickedArrivalMinutes !== undefined && clickedArrivalMinutes !== null && clickedArrivalMinutes > leadMinutes) {
+      const isNextBus = first && clickedArrivalMinutes !== first.remainingMinutes;
+      setTimerTrigger({
+        route,
+        minutes: clickedArrivalMinutes,
+        isNextBus,
+        originalMinutes: isNextBus ? (first?.remainingMinutes ?? undefined) : undefined,
+        timestamp: Date.now(),
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    // Otherwise, check if first arrival <= leadMinutes:
+    // If so, automatically find the next catchable arrival (> leadMinutes)!
+    const catchable = routeArrivals.find(a => a.remainingMinutes !== null && a.remainingMinutes > leadMinutes);
+
+    if (catchable && catchable.remainingMinutes !== null) {
+      const isNextBus = catchable !== first;
+      setTimerTrigger({
+        route,
+        minutes: catchable.remainingMinutes,
+        isNextBus,
+        originalMinutes: isNextBus ? (first?.remainingMinutes ?? undefined) : undefined,
+        timestamp: Date.now(),
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (first && first.remainingMinutes !== null) {
+      // If all arrivals are <= leadMinutes (impossible to catch)
+      setTimerTrigger({
+        route,
+        minutes: first.remainingMinutes,
+        isNextBus: false,
+        timestamp: Date.now(),
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const [kowloonTimerTrigger, setKowloonTimerTrigger] = useState<{ 
+    route: string; 
+    minutes: number; 
+    isNextBus?: boolean; 
+    originalMinutes?: number; 
+    timestamp: number 
+  } | null>(null);
+  const [activeKowloonTimerRoute, setActiveKowloonTimerRoute] = useState<string | null>(null);
+
+  const handleTriggerKowloonRouteTimer = (route: string, clickedArrivalMinutes?: number | null) => {
+    const stop = kowloonStops.find(s => s.route === route);
+    const routeArrivals = stop ? arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === route) || [] : [];
+    const first = routeArrivals[0];
+
+    // Ensure Kowloon section is expanded
+    setIsKowloonOpen(true);
+    setIsHomeOpen(false);
+    setIsShenzhenOpen(false);
+
+    // If caller explicitly clicked a minute that is > kowloonLeadMinutes, use it
+    if (clickedArrivalMinutes !== undefined && clickedArrivalMinutes !== null && clickedArrivalMinutes > kowloonLeadMinutes) {
+      const isNextBus = first && clickedArrivalMinutes !== first.remainingMinutes;
+      setKowloonTimerTrigger({
+        route,
+        minutes: clickedArrivalMinutes,
+        isNextBus,
+        originalMinutes: isNextBus ? (first?.remainingMinutes ?? undefined) : undefined,
+        timestamp: Date.now(),
+      });
+      return;
+    }
+
+    // Otherwise, check if first arrival <= kowloonLeadMinutes:
+    // If so, automatically find the next catchable arrival (> kowloonLeadMinutes)!
+    const catchable = routeArrivals.find(a => a.remainingMinutes !== null && a.remainingMinutes > kowloonLeadMinutes);
+
+    if (catchable && catchable.remainingMinutes !== null) {
+      const isNextBus = catchable !== first;
+      setKowloonTimerTrigger({
+        route,
+        minutes: catchable.remainingMinutes,
+        isNextBus,
+        originalMinutes: isNextBus ? (first?.remainingMinutes ?? undefined) : undefined,
+        timestamp: Date.now(),
+      });
+    } else if (first && first.remainingMinutes !== null) {
+      // If all arrivals are <= kowloonLeadMinutes (impossible to catch)
+      setKowloonTimerTrigger({
+        route,
+        minutes: first.remainingMinutes,
+        isNextBus: false,
+        timestamp: Date.now(),
+      });
+    }
+  };
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371e3; // metres
@@ -220,40 +354,159 @@ export default function App() {
   const kowloonStops = STOPS.filter(s => s.category === 'kowloon');
   const shenzhenStops = STOPS.filter(s => s.category === 'shenzhen');
 
-  // Find earliest arrival among pinned routes ('往屯門')
+  // Find earliest catchable arrival (> leadMinutes) among pinned routes ('往屯門')
   const earliestPinnedArrival = useMemo(() => {
-    let best: { route: string; minutes: number } | null = null;
+    let best: { route: string; minutes: number; isNextBus: boolean } | null = null;
     const targetRoutes = ['K51', 'K53', 'K51A', '61M', '52X'];
+
+    // 1. Look for first arrival that is catchable (> leadMinutes)
     for (const route of targetRoutes) {
       const stop = pinnedStops.find(s => s.route === route);
       if (!stop) continue;
       const routeArrivals = arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === route) || [];
+      if (routeArrivals.length === 0) continue;
+
       const first = routeArrivals[0];
-      if (first && first.remainingMinutes !== null && first.remainingMinutes >= 0) {
-        if (!best || first.remainingMinutes < best.minutes) {
-          best = { route, minutes: first.remainingMinutes };
+      const catchable = routeArrivals.find(a => a.remainingMinutes !== null && a.remainingMinutes > leadMinutes);
+
+      if (catchable && catchable.remainingMinutes !== null) {
+        const isNextBus = catchable !== first;
+        if (!best || catchable.remainingMinutes < best.minutes) {
+          best = { route, minutes: catchable.remainingMinutes, isNextBus };
         }
       }
     }
-    return best;
-  }, [arrivals, pinnedStops]);
 
-  // All pinned route arrivals for quick timers
+    // 2. Fallback: if all current buses are <= leadMinutes
+    if (!best) {
+      for (const route of targetRoutes) {
+        const stop = pinnedStops.find(s => s.route === route);
+        if (!stop) continue;
+        const routeArrivals = arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === route) || [];
+        const first = routeArrivals[0];
+        if (first && first.remainingMinutes !== null && first.remainingMinutes >= 0) {
+          if (!best || first.remainingMinutes < best.minutes) {
+            best = { route, minutes: first.remainingMinutes, isNextBus: false };
+          }
+        }
+      }
+    }
+
+    return best;
+  }, [arrivals, pinnedStops, leadMinutes]);
+
+  // All pinned route arrivals for quick timers (automatically targets next bus if first <= leadMinutes)
   const allPinnedRouteArrivals = useMemo(() => {
-    const list: { route: string; minutes: number | null }[] = [];
+    const list: { route: string; minutes: number | null; firstMinutes?: number | null; isNextBus?: boolean }[] = [];
     const targetRoutes = ['K51', 'K53', 'K51A', '61M', '52X'];
     for (const route of targetRoutes) {
       const stop = pinnedStops.find(s => s.route === route);
       if (!stop) continue;
       const routeArrivals = arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === route) || [];
+      if (routeArrivals.length === 0) {
+        list.push({ route, minutes: null });
+        continue;
+      }
+
       const first = routeArrivals[0];
-      list.push({
-        route,
-        minutes: (first && first.remainingMinutes !== null && first.remainingMinutes >= 0) ? first.remainingMinutes : null,
-      });
+      const catchable = routeArrivals.find(a => a.remainingMinutes !== null && a.remainingMinutes > leadMinutes);
+
+      if (catchable && catchable.remainingMinutes !== null) {
+        const isNext = catchable !== first;
+        list.push({
+          route,
+          minutes: catchable.remainingMinutes,
+          firstMinutes: first?.remainingMinutes ?? null,
+          isNextBus: isNext,
+        });
+      } else {
+        list.push({
+          route,
+          minutes: first?.remainingMinutes ?? null,
+          firstMinutes: first?.remainingMinutes ?? null,
+          isNextBus: false,
+        });
+      }
     }
     return list;
-  }, [arrivals, pinnedStops]);
+  }, [arrivals, pinnedStops, leadMinutes]);
+
+  // Find earliest catchable arrival (> kowloonLeadMinutes) among kowloon routes ('出九龍')
+  const earliestKowloonArrival = useMemo(() => {
+    let best: { route: string; minutes: number; isNextBus: boolean } | null = null;
+    const targetRoutes = ['61M', '52X', '140M', '952'];
+
+    // 1. Look for first arrival that is catchable (> kowloonLeadMinutes)
+    for (const route of targetRoutes) {
+      const stop = kowloonStops.find(s => s.route === route);
+      if (!stop) continue;
+      const routeArrivals = arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === route) || [];
+      if (routeArrivals.length === 0) continue;
+
+      const first = routeArrivals[0];
+      const catchable = routeArrivals.find(a => a.remainingMinutes !== null && a.remainingMinutes > kowloonLeadMinutes);
+
+      if (catchable && catchable.remainingMinutes !== null) {
+        const isNextBus = catchable !== first;
+        if (!best || catchable.remainingMinutes < best.minutes) {
+          best = { route, minutes: catchable.remainingMinutes, isNextBus };
+        }
+      }
+    }
+
+    // 2. Fallback: if all current buses are <= kowloonLeadMinutes
+    if (!best) {
+      for (const route of targetRoutes) {
+        const stop = kowloonStops.find(s => s.route === route);
+        if (!stop) continue;
+        const routeArrivals = arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === route) || [];
+        const first = routeArrivals[0];
+        if (first && first.remainingMinutes !== null && first.remainingMinutes >= 0) {
+          if (!best || first.remainingMinutes < best.minutes) {
+            best = { route, minutes: first.remainingMinutes, isNextBus: false };
+          }
+        }
+      }
+    }
+
+    return best;
+  }, [arrivals, kowloonStops, kowloonLeadMinutes]);
+
+  // All Kowloon route arrivals for quick timers (automatically targets next bus if first <= kowloonLeadMinutes)
+  const allKowloonRouteArrivals = useMemo(() => {
+    const list: { route: string; minutes: number | null; firstMinutes?: number | null; isNextBus?: boolean }[] = [];
+    const targetRoutes = ['61M', '52X', '140M', '952'];
+    for (const route of targetRoutes) {
+      const stop = kowloonStops.find(s => s.route === route);
+      if (!stop) continue;
+      const routeArrivals = arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === route) || [];
+      if (routeArrivals.length === 0) {
+        list.push({ route, minutes: null });
+        continue;
+      }
+
+      const first = routeArrivals[0];
+      const catchable = routeArrivals.find(a => a.remainingMinutes !== null && a.remainingMinutes > kowloonLeadMinutes);
+
+      if (catchable && catchable.remainingMinutes !== null) {
+        const isNext = catchable !== first;
+        list.push({
+          route,
+          minutes: catchable.remainingMinutes,
+          firstMinutes: first?.remainingMinutes ?? null,
+          isNextBus: isNext,
+        });
+      } else {
+        list.push({
+          route,
+          minutes: first?.remainingMinutes ?? null,
+          firstMinutes: first?.remainingMinutes ?? null,
+          isNextBus: false,
+        });
+      }
+    }
+    return list;
+  }, [arrivals, kowloonStops, kowloonLeadMinutes]);
 
   // Group home stops by virtual stop name
   const homeStopNames = ['新墟(往置樂方向)', '屯門站(往置樂方向)', '市中心(往置樂方向)', '華都(往置樂方向)'];
@@ -312,7 +565,15 @@ export default function App() {
         <DepartureTimer
           earliestRoute={earliestPinnedArrival?.route ?? null}
           earliestMinutes={earliestPinnedArrival?.minutes ?? null}
+          earliestIsNextBus={earliestPinnedArrival?.isNextBus}
           availableRoutes={allPinnedRouteArrivals}
+          selectedRouteTrigger={timerTrigger}
+          onActiveRouteChange={setActiveTimerRoute}
+          leadMinutes={leadMinutes}
+          onLeadMinutesChange={setLeadMinutes}
+          onRefresh={refreshAll}
+          isRefreshing={loading}
+          lastUpdated={lastUpdated}
         />
 
         {/* Row 1: MTRB K-Routes */}
@@ -321,12 +582,44 @@ export default function App() {
             const stop = pinnedStops.find(s => s.route === route);
             const routeArrivals = stop ? arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === route) || [] : [];
             const arrival = routeArrivals[0] || null;
-            const nextArrival = (route === 'K51' || route === 'K53') ? routeArrivals[1] || null : null;
+            const nextArrival = routeArrivals[1] || null;
             const styles = getPinnedStyles(arrival?.remainingMinutes ?? null);
-            
+            const isThisRouteActive = activeTimerRoute === route;
+            const hasValidArrival = arrival?.remainingMinutes !== null && arrival?.remainingMinutes !== undefined;
+
+            const firstIsUncatchable = hasValidArrival && (arrival?.remainingMinutes ?? 0) <= leadMinutes;
+            const catchableNext = routeArrivals.find(a => a.remainingMinutes !== null && a.remainingMinutes > leadMinutes);
+
             return (
-              <div key={route} className={`flex flex-col items-center p-2 bg-slate-50 rounded-xl border shadow-sm transition-all ${styles.border}`}>
-                <span className="text-base font-black text-blue-700 leading-tight">{route}</span>
+              <div 
+                key={route} 
+                onClick={() => {
+                  if (hasValidArrival) {
+                    handleTriggerRouteTimer(route, null);
+                  }
+                }}
+                className={`flex flex-col items-center p-2 rounded-xl border shadow-sm transition-all select-none ${
+                  isThisRouteActive 
+                    ? 'bg-amber-50/90 border-amber-400 ring-2 ring-amber-400 shadow-md' 
+                    : hasValidArrival
+                    ? 'bg-slate-50 hover:bg-blue-50/70 hover:border-blue-400 hover:shadow cursor-pointer active:scale-95'
+                    : 'bg-slate-50'
+                } ${styles.border}`}
+                title={
+                  hasValidArrival
+                    ? firstIsUncatchable && catchableNext
+                      ? `首班車（${arrival?.remainingMinutes}分）少於提前提醒時間趕不上，點擊自動為下班車（${catchableNext.remainingMinutes}分）倒數`
+                      : `點擊為【${route}】到站時間（${arrival?.remainingMinutes}分）開始出門倒數`
+                    : route
+                }
+              >
+                <div className="flex items-center gap-1">
+                  <span className="text-base font-black text-blue-700 leading-tight">{route}</span>
+                  {isThisRouteActive && (
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                  )}
+                </div>
+
                 <div className="mt-0.5 w-full">
                   {loading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
                     <div className="w-8 h-4 bg-slate-200 animate-pulse rounded mx-auto" />
@@ -339,12 +632,40 @@ export default function App() {
                           </span>
                           <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
                         </div>
+
+                        {/* Interactive Countdown Indicator / Button */}
+                        <div className="mt-1">
+                          {isThisRouteActive ? (
+                            <span className="text-[9px] bg-amber-500 text-white font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shadow-xs animate-pulse">
+                              <Clock className="w-2.5 h-2.5" /> 倒數中
+                            </span>
+                          ) : firstIsUncatchable && catchableNext ? (
+                            <span className="text-[9px] bg-amber-100 hover:bg-amber-600 text-amber-900 hover:text-white font-bold px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5 cursor-pointer border border-amber-300">
+                              ⏱️ 下班{catchableNext.remainingMinutes}分
+                            </span>
+                          ) : (
+                            <span className="text-[9px] bg-blue-100 hover:bg-blue-600 text-blue-700 hover:text-white font-bold px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5 cursor-pointer">
+                              ⏱️ 計時
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Next Arrival (Clickable for 2nd bus timer) */}
                         {nextArrival && nextArrival.remainingMinutes !== null && (
-                          <div className="flex items-baseline gap-0.5 opacity-60 border-t border-slate-200 w-full justify-center pt-1 mt-1">
-                            <span className="text-sm font-black leading-none text-slate-500">
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTriggerRouteTimer(route, nextArrival.remainingMinutes);
+                            }}
+                            className="flex items-baseline justify-center gap-0.5 border-t border-slate-200/90 w-full pt-1 mt-1 hover:bg-blue-100/70 rounded transition-all cursor-pointer"
+                            title={`點擊為下班【${route}】（${nextArrival.remainingMinutes}分）計時`}
+                          >
+                            <span className="text-[9px] text-slate-400 font-bold mr-0.5">下班:</span>
+                            <span className="text-sm font-black leading-none text-slate-600">
                               {nextArrival.remainingMinutes}
                             </span>
                             <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                            <span className="text-[8px] text-blue-600 font-bold ml-0.5">⏱️</span>
                           </div>
                         )}
                       </div>
@@ -364,22 +685,70 @@ export default function App() {
         <div className="grid grid-cols-2 gap-2">
           {['61M', '52X'].map(route => {
             const stop = pinnedStops.find(s => s.route === route);
-            const arrival = stop ? arrivals[`${stop.id}-${stop.route}`]?.find(a => a.route === route) : null;
+            const routeArrivals = stop ? arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === route) || [] : [];
+            const arrival = routeArrivals[0] || null;
+            const nextArrival = routeArrivals[1] || null;
             const styles = getPinnedStyles(arrival?.remainingMinutes ?? null);
+            const isThisRouteActive = activeTimerRoute === route;
+            const hasValidArrival = arrival?.remainingMinutes !== null && arrival?.remainingMinutes !== undefined;
+
+            const firstIsUncatchable = hasValidArrival && (arrival?.remainingMinutes ?? 0) <= leadMinutes;
+            const catchableNext = routeArrivals.find(a => a.remainingMinutes !== null && a.remainingMinutes > leadMinutes);
 
             return (
-              <div key={route} className={`flex items-center justify-between px-4 py-2 bg-slate-50 rounded-xl border shadow-sm transition-all ${styles.border}`}>
-                <span className="text-base font-black text-blue-700">{route}</span>
+              <div 
+                key={route} 
+                onClick={() => {
+                  if (hasValidArrival) {
+                    handleTriggerRouteTimer(route, null);
+                  }
+                }}
+                className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border shadow-sm transition-all select-none ${
+                  isThisRouteActive 
+                    ? 'bg-amber-50/90 border-amber-400 ring-2 ring-amber-400 shadow-md' 
+                    : hasValidArrival
+                    ? 'bg-slate-50 hover:bg-blue-50/70 hover:border-blue-400 hover:shadow cursor-pointer active:scale-95'
+                    : 'bg-slate-50'
+                } ${styles.border}`}
+                title={
+                  hasValidArrival
+                    ? firstIsUncatchable && catchableNext
+                      ? `首班車（${arrival?.remainingMinutes}分）少於提前提醒時間趕不上，點擊自動為下班車（${catchableNext.remainingMinutes}分）倒數`
+                      : `點擊為【${route}】到站時間（${arrival?.remainingMinutes}分）開始出門倒數`
+                    : route
+                }
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="text-base font-black text-blue-700">{route}</span>
+                  {isThisRouteActive && (
+                    <span className="text-[9px] bg-amber-500 text-white font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shadow-xs animate-pulse">
+                      <Clock className="w-2.5 h-2.5" /> 倒數中
+                    </span>
+                  )}
+                </div>
                 <div>
                   {loading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
                     <div className="w-8 h-4 bg-slate-200 animate-pulse rounded" />
                   ) : arrival ? (
                     arrival.remainingMinutes !== null ? (
-                      <div className="flex items-baseline gap-0.5">
-                        <span className={`text-lg font-black ${styles.text}`}>
-                          {arrival.remainingMinutes}
-                        </span>
-                        <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-baseline gap-0.5">
+                          <span className={`text-lg font-black ${styles.text}`}>
+                            {arrival.remainingMinutes}
+                          </span>
+                          <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                        </div>
+                        {!isThisRouteActive && (
+                          firstIsUncatchable && catchableNext ? (
+                            <span className="text-[10px] bg-amber-100 hover:bg-amber-600 text-amber-900 hover:text-white font-bold px-2 py-0.5 rounded-md flex items-center gap-0.5 transition-all border border-amber-300">
+                              ⏱️ 下班{catchableNext.remainingMinutes}分
+                            </span>
+                          ) : (
+                            <span className="text-[10px] bg-blue-100 hover:bg-blue-600 text-blue-700 hover:text-white font-bold px-2 py-0.5 rounded-md flex items-center gap-0.5 transition-all">
+                              ⏱️ 計時
+                            </span>
+                          )
+                        )}
                       </div>
                     ) : (
                       <span className="text-[10px] text-slate-400 font-bold">{arrival.remark || '暫無'}</span>
@@ -535,44 +904,139 @@ export default function App() {
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="p-3 space-y-4">
+            <div className="p-4 space-y-4">
+              {/* Departure Timer Widget for 出九龍 */}
+              <DepartureTimer
+                title="出九龍出門提醒計時器"
+                targetDestination="出九龍"
+                earliestRoute={earliestKowloonArrival?.route ?? null}
+                earliestMinutes={earliestKowloonArrival?.minutes ?? null}
+                earliestIsNextBus={earliestKowloonArrival?.isNextBus}
+                availableRoutes={allKowloonRouteArrivals}
+                selectedRouteTrigger={kowloonTimerTrigger}
+                onActiveRouteChange={setActiveKowloonTimerRoute}
+                leadMinutes={kowloonLeadMinutes}
+                onLeadMinutesChange={setKowloonLeadMinutes}
+                leadMinutesOptions={[6, 7, 8]}
+                recommendedLeadMinutes={7}
+                storageKey="bus_reminder_lead_minutes_kowloon"
+                onRefresh={refreshAll}
+                isRefreshing={loading}
+                lastUpdated={lastUpdated}
+              />
+
               <div className="space-y-1.5">
                 <h3 className="text-sm font-bold border-l-4 border-teal-600 pl-2 text-slate-700">
                   香港黃金海岸 (Gold Coast)
                 </h3>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   {kowloonStops.map((stop) => {
                     const stopArrivals = arrivals[`${stop.id}-${stop.route}`] || [];
-                    const displayArrivals = stopArrivals.slice(0, 2);
-                    const firstArrival = displayArrivals[0];
-                    const styles = getKowloonStyles(firstArrival?.remainingMinutes ?? null);
+                    const arrival = stopArrivals[0] || null;
+                    const nextArrival = stopArrivals[1] || null;
+                    const styles = getKowloonStyles(arrival?.remainingMinutes ?? null);
+                    const isThisRouteActive = activeKowloonTimerRoute === stop.route;
+                    const hasValidArrival = arrival?.remainingMinutes !== null && arrival?.remainingMinutes !== undefined;
+
+                    const firstIsUncatchable = hasValidArrival && (arrival?.remainingMinutes ?? 0) <= kowloonLeadMinutes;
+                    const catchableNext = stopArrivals.find(a => a.remainingMinutes !== null && a.remainingMinutes > kowloonLeadMinutes);
+
+                    // Friendly destination hint
+                    let destHint = '';
+                    if (stop.route === '61M') destHint = '荔景(北)';
+                    else if (stop.route === '52X') destHint = '旺角(柏景灣)';
+                    else if (stop.route === '140M') destHint = '青衣站';
+                    else if (stop.route === '952') destHint = '銅鑼灣(摩頓台)';
 
                     return (
-                      <div key={`${stop.id}-${stop.route}`} className={`bg-slate-50 border rounded-xl p-3 flex flex-col items-center shadow-sm transition-all ${styles.border}`}>
-                        <div className="flex items-center gap-1 mb-1">
-                          <span className="text-base font-black text-blue-700 leading-tight tracking-tight">{stop.route}</span>
+                      <div 
+                        key={`${stop.id}-${stop.route}`} 
+                        onClick={() => {
+                          if (hasValidArrival) {
+                            handleTriggerKowloonRouteTimer(stop.route, null);
+                          }
+                        }}
+                        className={`flex flex-col items-center p-3 rounded-xl border shadow-sm transition-all select-none ${
+                          isThisRouteActive 
+                            ? 'bg-amber-50/90 border-amber-400 ring-2 ring-amber-400 shadow-md' 
+                            : hasValidArrival
+                            ? 'bg-slate-50 hover:bg-teal-50/70 hover:border-teal-400 hover:shadow cursor-pointer active:scale-95'
+                            : 'bg-slate-50'
+                        } ${styles.border}`}
+                        title={
+                          hasValidArrival
+                            ? firstIsUncatchable && catchableNext
+                              ? `首班車（${arrival?.remainingMinutes}分）少於提前提醒時間趕不上，點擊自動為下班車（${catchableNext.remainingMinutes}分）倒數`
+                              : `點擊為【${stop.route}】到站時間（${arrival?.remainingMinutes}分）開始出門倒數`
+                            : stop.route
+                        }
+                      >
+                        <div className="flex items-center gap-1">
+                          <span className="text-base font-black text-teal-800 leading-tight">{stop.route}</span>
+                          {isThisRouteActive && (
+                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                          )}
                         </div>
-                        
-                        <div className="flex flex-col items-center gap-1 w-full">
+                        {destHint && (
+                          <span className="text-[10px] text-slate-500 font-medium truncate max-w-full text-center">
+                            往 {destHint}
+                          </span>
+                        )}
+
+                        <div className="mt-1 w-full">
                           {loading && stopArrivals.length === 0 ? (
-                            <div className="w-12 h-6 bg-slate-200 animate-pulse rounded" />
-                          ) : displayArrivals.length > 0 ? (
-                            displayArrivals.map((arrival, idx) => (
-                              <div key={idx} className={`flex items-baseline gap-1 ${idx === 0 ? '' : 'opacity-60 border-t border-slate-200 w-full justify-center pt-1 mt-1'}`}>
-                                {arrival.remainingMinutes !== null ? (
-                                  <>
-                                    <span className={`${idx === 0 ? 'text-base' : 'text-sm'} font-black leading-none ${idx === 0 ? styles.text : 'text-slate-500'}`}>
-                                      {arrival.remainingMinutes}
+                            <div className="w-8 h-4 bg-slate-200 animate-pulse rounded mx-auto" />
+                          ) : arrival ? (
+                            arrival.remainingMinutes !== null ? (
+                              <div className="flex flex-col items-center w-full">
+                                <div className="flex items-baseline gap-0.5">
+                                  <span className={`text-lg font-black leading-none ${styles.text}`}>
+                                    {arrival.remainingMinutes}
+                                  </span>
+                                  <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                                </div>
+
+                                {/* Interactive Countdown Indicator / Button */}
+                                <div className="mt-1">
+                                  {isThisRouteActive ? (
+                                    <span className="text-[9px] bg-amber-500 text-white font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shadow-xs animate-pulse">
+                                      <Clock className="w-2.5 h-2.5" /> 倒數中
+                                    </span>
+                                  ) : firstIsUncatchable && catchableNext ? (
+                                    <span className="text-[9px] bg-amber-100 hover:bg-amber-600 text-amber-900 hover:text-white font-bold px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5 cursor-pointer border border-amber-300">
+                                      ⏱️ 下班{catchableNext.remainingMinutes}分
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] bg-teal-100 hover:bg-teal-600 text-teal-800 hover:text-white font-bold px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5 cursor-pointer">
+                                      ⏱️ 計時
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Next Arrival (Clickable for 2nd bus timer) */}
+                                {nextArrival && nextArrival.remainingMinutes !== null && (
+                                  <div 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleTriggerKowloonRouteTimer(stop.route, nextArrival.remainingMinutes);
+                                    }}
+                                    className="flex items-baseline justify-center gap-0.5 border-t border-slate-200/90 w-full pt-1 mt-1 hover:bg-teal-100/70 rounded transition-all cursor-pointer"
+                                    title={`點擊為下班【${stop.route}】（${nextArrival.remainingMinutes}分）計時`}
+                                  >
+                                    <span className="text-[9px] text-slate-400 font-bold mr-0.5">下班:</span>
+                                    <span className="text-sm font-black leading-none text-slate-600">
+                                      {nextArrival.remainingMinutes}
                                     </span>
                                     <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
-                                  </>
-                                ) : (
-                                  <span className="text-[10px] text-slate-400 font-bold">{arrival.remark || '暫無'}</span>
+                                    <span className="text-[8px] text-teal-600 font-bold ml-0.5">⏱️</span>
+                                  </div>
                                 )}
                               </div>
-                            ))
+                            ) : (
+                              <span className="text-[10px] text-slate-400 font-bold block text-center">{arrival.remark || '暫無'}</span>
+                            )
                           ) : (
-                            <span className="text-[10px] text-slate-300 font-bold italic">暫無</span>
+                            <span className="text-[10px] text-slate-300 font-bold italic block text-center">暫無</span>
                           )}
                         </div>
                       </div>
