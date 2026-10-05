@@ -238,6 +238,23 @@ export default function App() {
     return best;
   }, [arrivals, pinnedStops]);
 
+  // All pinned route arrivals for quick timers
+  const allPinnedRouteArrivals = useMemo(() => {
+    const list: { route: string; minutes: number | null }[] = [];
+    const targetRoutes = ['K51', 'K53', 'K51A', '61M', '52X'];
+    for (const route of targetRoutes) {
+      const stop = pinnedStops.find(s => s.route === route);
+      if (!stop) continue;
+      const routeArrivals = arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === route) || [];
+      const first = routeArrivals[0];
+      list.push({
+        route,
+        minutes: (first && first.remainingMinutes !== null && first.remainingMinutes >= 0) ? first.remainingMinutes : null,
+      });
+    }
+    return list;
+  }, [arrivals, pinnedStops]);
+
   // Group home stops by virtual stop name
   const homeStopNames = ['新墟(往置樂方向)', '屯門站(往置樂方向)', '市中心(往置樂方向)', '華都(往置樂方向)'];
 
@@ -291,10 +308,11 @@ export default function App() {
         {!isHomeOpen ? <RefreshControl /> : <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">置頂路線</span>}
       </div>
       <div className="p-4 space-y-4">
-        {/* Departure Timer Widget for 往屯門 (Only shows button if earliest bus > 8 mins) */}
+        {/* Departure Timer Widget for 往屯門 */}
         <DepartureTimer
           earliestRoute={earliestPinnedArrival?.route ?? null}
           earliestMinutes={earliestPinnedArrival?.minutes ?? null}
+          availableRoutes={allPinnedRouteArrivals}
         />
 
         {/* Row 1: MTRB K-Routes */}

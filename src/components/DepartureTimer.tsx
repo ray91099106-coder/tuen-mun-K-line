@@ -4,19 +4,27 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Clock, Bell, Volume2, AlertTriangle, X, ExternalLink, HelpCircle, CheckCircle2, Play } from 'lucide-react';
+import { Clock, Bell, Volume2, AlertTriangle, X, ExternalLink, HelpCircle, CheckCircle2, Play, Sparkles } from 'lucide-react';
 import { playStartChime, playAlarmSound, stopAlarmSound, requestScreenWakeLock, releaseScreenWakeLock } from '../services/timerSound';
+
+interface RouteArrivalInfo {
+  route: string;
+  minutes: number | null;
+}
 
 interface DepartureTimerProps {
   earliestRoute: string | null;
   earliestMinutes: number | null;
+  availableRoutes?: RouteArrivalInfo[];
+  selectedRouteTrigger?: { route: string; minutes: number } | null;
 }
 
-export const DepartureTimer: React.FC<DepartureTimerProps> = ({ earliestRoute, earliestMinutes }) => {
-  // Target bus arrival minutes (e.g. 14 min)
-  // Alarm triggers when bus reaches 8 min, so countdown duration = earliestMinutes - 8
-  const targetCountdownMinutes = earliestMinutes !== null && earliestMinutes > 8 ? earliestMinutes - 8 : 0;
-
+export const DepartureTimer: React.FC<DepartureTimerProps> = ({
+  earliestRoute,
+  earliestMinutes,
+  availableRoutes = [],
+  selectedRouteTrigger = null,
+}) => {
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
   const [totalInitialSeconds, setTotalInitialSeconds] = useState<number>(0);
@@ -30,8 +38,6 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({ earliestRoute, e
   // Trigger iOS Shortcut URL scheme
   const triggerIosShortcut = (mins: number) => {
     try {
-      // Shortcuts URL scheme passing minutes as input parameter
-      // Name: '巴士提醒'
       const shortcutUrl = `shortcuts://run-shortcut?name=${encodeURIComponent('巴士提醒')}&input=${mins}`;
       window.location.href = shortcutUrl;
     } catch (e) {
@@ -46,7 +52,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({ earliestRoute, e
     playStartChime();
     requestScreenWakeLock();
 
-    setActiveRoute(route);
+    setActiveRoute(route || '往屯門');
     setTotalInitialSeconds(totalSecs);
     setRemainingSeconds(totalSecs);
     setIsRunning(true);
@@ -120,8 +126,17 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({ earliestRoute, e
     ? Math.max(0, Math.min(100, ((totalInitialSeconds - remainingSeconds) / totalInitialSeconds) * 100))
     : 0;
 
+  // Determine earliest target countdown
+  const isEarliestOver8 = earliestMinutes !== null && earliestMinutes > 8;
+  const targetCountdownMinutes = isEarliestOver8 && earliestMinutes !== null ? earliestMinutes - 8 : 0;
+
+  // Filter other routes that are > 8 minutes for quick selection
+  const otherRoutesOver8 = availableRoutes.filter(
+    r => r.minutes !== null && r.minutes > 8 && r.route !== earliestRoute
+  );
+
   return (
-    <>
+    <div className="w-full mb-3">
       {/* 1. Alarm Alert Modal (when timer finishes) */}
       {isAlarmActive && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -141,7 +156,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({ earliestRoute, e
             </p>
             <button
               onClick={stopAlarm}
-              className="w-full py-4 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black text-lg rounded-2xl shadow-lg shadow-red-200 transition-all"
+              className="w-full py-4 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black text-lg rounded-2xl shadow-lg shadow-red-200 transition-all cursor-pointer"
             >
               停止鬧鐘
             </button>
@@ -150,8 +165,8 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({ earliestRoute, e
       )}
 
       {/* 2. Active Countdown Card (when running) */}
-      {isRunning && (
-        <div className="mb-4 bg-gradient-to-r from-blue-700 to-indigo-800 text-white rounded-2xl p-4 shadow-lg border border-blue-400/30">
+      {isRunning ? (
+        <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white rounded-2xl p-4 shadow-lg border border-blue-400/30">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
@@ -161,7 +176,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({ earliestRoute, e
             </div>
             <button
               onClick={cancelTimer}
-              className="text-xs bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 font-bold transition-all"
+              className="text-xs bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 font-bold transition-all cursor-pointer"
             >
               <X className="w-3.5 h-3.5" /> 取消
             </button>
@@ -179,7 +194,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({ earliestRoute, e
             
             <button
               onClick={() => triggerIosShortcut(Math.ceil(remainingSeconds / 60))}
-              className="px-3 py-2 bg-white text-blue-800 font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 hover:bg-blue-50 active:scale-95 transition-all"
+              className="px-3 py-2 bg-white text-blue-800 font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 hover:bg-blue-50 active:scale-95 transition-all cursor-pointer"
               title="喚醒 iPhone 系統計時器以支援鎖定螢幕"
             >
               <ExternalLink className="w-3.5 h-3.5" />
@@ -195,71 +210,120 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({ earliestRoute, e
             />
           </div>
         </div>
-      )}
-
-      {/* 3. Timer Prompt Button (visible when earliest arrival > 8 mins and not currently running) */}
-      {!isRunning && targetCountdownMinutes > 0 && earliestRoute && (
-        <div className="mb-4 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-3 sm:p-4 shadow-sm">
+      ) : (
+        /* 3. Permanent Departure Timer Panel */
+        <div className={`rounded-2xl p-3 sm:p-4 border-2 transition-all ${
+          isEarliestOver8 
+            ? 'bg-amber-50/90 border-amber-400 shadow-sm' 
+            : 'bg-slate-50 border-slate-200'
+        }`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm mt-0.5 ${
+                isEarliestOver8 ? 'bg-amber-500 text-white' : 'bg-blue-600 text-white'
+              }`}>
                 <Clock className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-sm font-black text-amber-950">
-                    首班車【{earliestRoute}】{earliestMinutes} 分鐘後到達
-                  </h3>
-                  <span className="text-[11px] bg-amber-200 text-amber-900 font-extrabold px-2 py-0.5 rounded-full">
-                    大於 8 分鐘
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    ⏱️ 往屯門出門提醒計時器
                   </span>
+                  {isEarliestOver8 ? (
+                    <span className="text-[11px] bg-amber-500 text-white font-extrabold px-2 py-0.5 rounded-full animate-pulse">
+                      首班車 &gt; 8分鐘
+                    </span>
+                  ) : earliestMinutes !== null ? (
+                    <span className="text-[11px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-full">
+                      首班車 ≤ 8分鐘 (即將抵達)
+                    </span>
+                  ) : null}
                 </div>
-                <p className="text-xs text-amber-800 mt-1">
-                  建議倒數 <strong className="text-amber-950 font-black">{targetCountdownMinutes} 分鐘</strong>，於到站前 8 分鐘響鈴出門。
-                </p>
+
+                <div className="mt-0.5">
+                  {isEarliestOver8 && earliestRoute ? (
+                    <p className="text-sm font-black text-slate-800">
+                      首班車【<span className="text-blue-700 font-black">{earliestRoute}</span>】預計 <span className="text-red-600 font-black">{earliestMinutes} 分鐘</span> 後到達。
+                      <span className="font-normal text-xs text-slate-600 block sm:inline sm:ml-1">
+                        點擊下方按鈕開始倒數 <strong className="text-amber-900 font-bold">{targetCountdownMinutes} 分鐘</strong>，於距到站 8 分鐘時響鈴出門！
+                      </span>
+                    </p>
+                  ) : earliestMinutes !== null && earliestRoute ? (
+                    <p className="text-xs text-slate-600">
+                      首班車【<strong className="text-blue-700 font-bold">{earliestRoute}</strong>】約 <strong className="text-emerald-700 font-bold">{earliestMinutes} 分鐘</strong> 後到達（已少於8分鐘，可即時出門）。
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      正在獲取即時到站時間，你亦可隨時點擊「測試10秒」測試響鈴或設定計時。
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            {/* Main Action Buttons */}
+            <div className="flex items-center gap-2 self-start sm:self-center shrink-0 flex-wrap">
+              {isEarliestOver8 && earliestRoute && (
+                <button
+                  onClick={() => startTimer(targetCountdownMinutes, earliestRoute, false)}
+                  className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-black text-sm rounded-xl shadow-md shadow-amber-600/20 flex items-center gap-1.5 transition-all cursor-pointer ring-2 ring-amber-400"
+                >
+                  <Play className="w-4 h-4 fill-white" />
+                  開始倒數 {targetCountdownMinutes} 分鐘
+                </button>
+              )}
+
               <button
-                onClick={() => startTimer(targetCountdownMinutes, earliestRoute, false)}
-                className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-black text-sm rounded-xl shadow-md shadow-amber-600/20 flex items-center gap-1.5 transition-all"
+                onClick={() => startTimer(0, earliestRoute || '測試', true)}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1 transition-all cursor-pointer"
+                title="立即測試 10 秒倒數與響鈴"
               >
-                <Play className="w-4 h-4 fill-white" />
-                設定 {targetCountdownMinutes} 分鐘倒數
+                <Sparkles className="w-3.5 h-3.5" />
+                ⚡ 測試10秒
               </button>
 
               <button
                 onClick={() => setShowHelpModal(true)}
-                className="p-2.5 text-amber-800 bg-white hover:bg-amber-100 border border-amber-300 rounded-xl transition-all"
-                title="iOS 原生計時器設定教學"
+                className="p-2 text-slate-600 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl transition-all cursor-pointer"
+                title="iPhone 原生計時 (iOS 捷徑) 教學"
               >
                 <HelpCircle className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Quick test buttons toolbar */}
-          <div className="mt-3 pt-2.5 border-t border-amber-200/60 flex items-center justify-between text-xs text-amber-800">
-            <span className="text-[11px] text-amber-700 font-medium">
-              💡 支援 iOS Chrome 鎖定螢幕（搭配捷徑）或螢幕長亮即時鈴聲
-            </span>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => startTimer(0, earliestRoute, true)}
-                className="text-[11px] text-amber-900 bg-amber-200/70 hover:bg-amber-200 px-2 py-1 rounded font-bold transition-all"
-              >
-                ⚡ 測試10秒
-              </button>
+          {/* Secondary bar: Other routes over 8 mins & Test tone */}
+          <div className="mt-3 pt-2.5 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {otherRoutesOver8.length > 0 && (
+                <>
+                  <span className="text-[11px] font-bold text-slate-500">其他班次倒數：</span>
+                  {otherRoutesOver8.map((r) => {
+                    const cMins = (r.minutes ?? 0) - 8;
+                    return (
+                      <button
+                        key={r.route}
+                        onClick={() => startTimer(cMins, r.route, false)}
+                        className="text-[11px] bg-white border border-slate-300 hover:border-blue-500 text-blue-700 font-bold px-2 py-0.5 rounded-lg transition-all cursor-pointer"
+                      >
+                        【{r.route}】{r.minutes}分 ➜ 倒數{cMins}分
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
               <button
                 onClick={() => {
                   playStartChime();
                   setTimeout(() => playAlarmSound(), 300);
                   setTimeout(() => stopAlarmSound(), 3000);
                 }}
-                className="text-[11px] text-amber-900 bg-amber-200/70 hover:bg-amber-200 px-2 py-1 rounded font-bold transition-all flex items-center gap-1"
+                className="text-[11px] text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer"
               >
-                <Volume2 className="w-3 h-3" /> 試聽鈴聲
+                <Volume2 className="w-3.5 h-3.5 text-blue-600" /> 試聽響鈴
               </button>
             </div>
           </div>
@@ -277,7 +341,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({ earliestRoute, e
               </div>
               <button
                 onClick={() => setShowHelpModal(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -318,7 +382,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({ earliestRoute, e
               </a>
               <button
                 onClick={() => setShowHelpModal(false)}
-                className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
+                className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
               >
                 知道了
               </button>
@@ -326,6 +390,6 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({ earliestRoute, e
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
