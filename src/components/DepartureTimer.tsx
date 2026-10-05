@@ -4,7 +4,7 @@
  * dynamic delay/advance adjustment, manual +/- nudges, iOS Shortcuts sync, and Web Audio alarm.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Clock, Bell, Volume2, AlertTriangle, X, ExternalLink, HelpCircle, 
   CheckCircle2, Play, Pause, Square, Sparkles, Smartphone, RefreshCw, 
@@ -127,6 +127,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
   const [totalInitialSeconds, setTotalInitialSeconds] = useState<number>(0);
   const [activeRoute, setActiveRoute] = useState<string>('');
+  const [targetIsNextBus, setTargetIsNextBus] = useState<boolean>(false);
   const [isAlarmActive, setIsAlarmActive] = useState<boolean>(false);
   const [alarmCountdown, setAlarmCountdown] = useState<number>(15);
   const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
@@ -140,6 +141,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
   const [lastCalibrateNotice, setLastCalibrateNotice] = useState<CalibrateNotice | null>(null);
 
   const timerRef = useRef<number | null>(null);
+  const lastHandledTriggerRef = useRef<number | null>(null);
 
   // Trigger iOS Shortcut URL scheme
   const triggerIosShortcut = (mins: number) => {
@@ -152,10 +154,11 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
   };
 
   // Start web timer
-  const startTimer = (mins: number, route: string, isTest = false) => {
+  const startTimer = (mins: number, route: string, isTest = false, isNextBus = false) => {
     const routeName = route || earliestRoute || (targetDestination || '往屯門');
     setActiveRoute(routeName);
     setLastTriggerMode(isTest ? 'test' : 'normal');
+    setTargetIsNextBus(isNextBus);
 
     playStartChime();
     requestScreenWakeLock();
@@ -173,9 +176,16 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
     } else {
       // Find actual current ETA for this route
       const currentRouteInfo = availableRoutes.find(r => r.route === routeName);
-      const busEtaMins = (currentRouteInfo && currentRouteInfo.minutes !== null) 
-        ? currentRouteInfo.minutes 
-        : (mins + leadMinutes);
+      let busEtaMins: number;
+      if (currentRouteInfo && currentRouteInfo.minutes !== null) {
+        if (!isNextBus && currentRouteInfo.isNextBus && currentRouteInfo.firstMinutes !== null && currentRouteInfo.firstMinutes !== undefined) {
+          busEtaMins = currentRouteInfo.firstMinutes;
+        } else {
+          busEtaMins = currentRouteInfo.minutes;
+        }
+      } else {
+        busEtaMins = mins + leadMinutes;
+      }
 
       const busArrivalMs = now + (busEtaMins * 60 * 1000);
       const alarmMs = busArrivalMs - (leadMinutes * 60 * 1000);
@@ -234,12 +244,24 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
 
   // Timer countdown loop - precisely calculating from target timestamp
   useEffect(() => {
-    if (isRunning && !isPaused && remainingSeconds > 0) {
-      timerRef.current = window.setInterval(() => {
-        const now = Date.now();
-        const secsLeft = Math.max(0, Math.round((targetAlarmTimestamp - now) / 1000));
+    if (isRunning && !isPaused) {
+      const now = Date.now();
+      const secsLeft = Math.max(0, Math.round((targetAlarmTimestamp - now) / 1000));
+      setRemainingSeconds(secsLeft);
+      if (secsLeft <= 0) {
+        setIsRunning(false);
+        setIsPaused(false);
+        setRemainingSeconds(0);
+        setIsAlarmActive(true);
+        playAlarmSound();
+        return;
+      }
 
-        if (secsLeft <= 0) {
+      timerRef.current = window.setInterval(() => {
+        const currentNow = Date.now();
+        const currentSecsLeft = Math.max(0, Math.round((targetAlarmTimestamp - currentNow) / 1000));
+
+        if (currentSecsLeft <= 0) {
           if (timerRef.current) clearInterval(timerRef.current);
           setIsRunning(false);
           setIsPaused(false);
@@ -247,7 +269,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
           setIsAlarmActive(true);
           playAlarmSound();
         } else {
-          setRemainingSeconds(secsLeft);
+          setRemainingSeconds(currentSecsLeft);
         }
       }, 1000);
     }
@@ -258,7 +280,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
         timerRef.current = null;
       }
     };
-  }, [isRunning, isPaused, remainingSeconds, targetAlarmTimestamp]);
+  }, [isRunning, isPaused, targetAlarmTimestamp]);
 
   // Clean up wake lock and sound when unmounted
   useEffect(() => {
@@ -301,9 +323,14 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
   // Handle selectedRouteTrigger from bus grid cards
   useEffect(() => {
     if (selectedRouteTrigger && selectedRouteTrigger.minutes !== undefined && selectedRouteTrigger.minutes !== null) {
+      if (selectedRouteTrigger.timestamp && lastHandledTriggerRef.current === selectedRouteTrigger.timestamp) {
+        return;
+      }
+      lastHandledTriggerRef.current = selectedRouteTrigger.timestamp || Date.now();
+
       const { route, minutes, isNextBus, originalMinutes } = selectedRouteTrigger;
       const targetCountdown = Math.max(0, minutes - leadMinutes);
-      startTimer(targetCountdown, route, false);
+      startTimer(targetCountdown, route, false, Boolean(isNextBus));
       if (isNextBus && originalMinutes !== undefined) {
         setLastCalibrateNotice({
           type: 'delay',
@@ -337,57 +364,71 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
     const now = Date.now();
     const secsLeft = Math.max(0, Math.round((targetAlarmTimestamp - now) / 1000));
 
-    // 🔒 當計時器倒數至小於等於 2 分鐘 (120 秒) 時，停止更新計時器調節到站時間，強制倒數下去
-    // 避免計時器發現到站時間小於預設時間被跳至下一班時間較長的班次，導致計時器永遠無法響起
+    // 🔒 核心保護：當計時器倒數至小於等於 2 分鐘 (120 秒) 時，
+    // 立即停止更新計時器調節到站時間，強制倒數下去！
+    // 徹底避免計時器發現到站時間小於預設時間（例如小於 8 分鐘被跳至下一班時間較長的 15 分鐘），
+    // 導致計時器永遠無法響起的情況！
     if (secsLeft <= 120 || remainingSeconds <= 120) {
       return;
     }
 
     // Locate the active route in live availableRoutes
     let currentBusInfo = availableRoutes.find(r => r.route === activeRoute);
-    if (!currentBusInfo && (activeRoute === '首班車' || activeRoute === '往屯門')) {
+    if (!currentBusInfo && (activeRoute === '首班車' || activeRoute === '往屯門' || activeRoute === '出九龍')) {
       currentBusInfo = availableRoutes
         .filter(r => r.minutes !== null && r.minutes > 0)
         .sort((a, b) => (a.minutes ?? 999) - (b.minutes ?? 999))[0];
     }
 
-    if (!currentBusInfo || currentBusInfo.minutes === null) return;
+    if (!currentBusInfo) return;
 
-    const currentBusEta = currentBusInfo.minutes;
+    // 判斷當前計時追蹤的到底是首班車還是下班車
+    let currentBusEta: number | null = null;
+    if (!targetIsNextBus) {
+      // 我們計時的是首班車
+      if (currentBusInfo.isNextBus && currentBusInfo.firstMinutes !== null && currentBusInfo.firstMinutes !== undefined) {
+        // availableRoutes 已經因為首班車 ≤ leadMinutes 自動跳轉至下班車（例如 15 分鐘）
+        // 但我們正在為首班車倒數，真實首班車到站時間為 firstMinutes
+        currentBusEta = currentBusInfo.firstMinutes;
+      } else {
+        currentBusEta = currentBusInfo.minutes;
+      }
+    } else {
+      // 我們計時的是下班車
+      currentBusEta = currentBusInfo.minutes;
+    }
 
-    // 🛡️ 防跳班保護：若最新 ETA 突然大幅增加 (例如相差 4 分鐘以上)，
-    // 說明首班車已進入出門提醒時間或到站，availableRoutes 已跳轉至下一班車，絕不可向後延長倒數時間！
-    if (lastSyncedBusEta !== null && (currentBusEta - lastSyncedBusEta) >= 4) {
+    if (currentBusEta === null) return;
+
+    // 🛡️ 防跳班保護 1：若首班車已進入出門提醒時間（≤ leadMinutes，例如 ≤ 8 分鐘）
+    // 說明首班車已到達預設出門範圍，絕不可拿下一班車（如 15 分鐘）延長倒數時間！
+    // 計時器應維持原定節奏強制倒數下去，確保時間一到準時響鈴
+    if (!targetIsNextBus && currentBusEta <= leadMinutes) {
       return;
     }
 
-    // Condition 1: Bus is already within lead time (e.g. <= 8 min)
-    if (currentBusEta <= leadMinutes) {
-      setLastCalibrateNotice({
-        type: 'urgent',
-        message: `🚨 班次即將到站：【${activeRoute}】已進入最後 ${currentBusEta} 分鐘到站範圍，請立即出門！`,
-        timestamp: new Date()
-      });
-      setTargetAlarmTimestamp(now);
-      setRemainingSeconds(0);
-      setIsRunning(false);
-      setIsAlarmActive(true);
-      playAlarmSound();
+    // 🛡️ 防跳班保護 2：若最新 ETA 相比上次記錄突然大幅增加（例如相差 3 分鐘以上）
+    // 說明班次已換班跳轉至下一班車，絕不可向後延長倒數時間！
+    if (lastSyncedBusEta !== null && (currentBusEta - lastSyncedBusEta) >= 3) {
       return;
     }
 
-    // Condition 2: Calculate drift against expected schedule
+    // 計算正常路況漂移
     const newProjectedBusArrival = now + (currentBusEta * 60 * 1000);
     const scheduledBusArrival = targetAlarmTimestamp + (leadMinutes * 60 * 1000);
     const driftSecs = (newProjectedBusArrival - scheduledBusArrival) / 1000;
     const driftMinutes = Math.round(driftSecs / 60);
 
-    // Only apply calibration when actual traffic drift is >= 1 full minute
-    // to prevent jitter from 30s integer rounding
-    if (Math.abs(driftMinutes) >= 1) {
+    // 只有在合理路況漂移（1 ~ 2 分鐘微幅調整）且調整後倒數時間依然大於 2 分鐘時才微調
+    if (Math.abs(driftMinutes) >= 1 && Math.abs(driftMinutes) <= 3) {
       const shiftMs = driftMinutes * 60 * 1000;
       const newTargetAlarm = targetAlarmTimestamp + shiftMs;
       const newSecs = Math.max(1, Math.round((newTargetAlarm - now) / 1000));
+
+      // 若調節後會導致剩餘時間小於等於 2 分鐘，則鎖定進入最後強制倒數，不再頻繁變更
+      if (newSecs <= 120) {
+        return;
+      }
 
       setTargetAlarmTimestamp(newTargetAlarm);
       setTargetBusArrivalTimestamp(prev => prev + shiftMs);
@@ -422,7 +463,9 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
     targetAlarmTimestamp, 
     leadMinutes, 
     totalInitialSeconds, 
-    lastSyncedBusEta
+    lastSyncedBusEta,
+    targetIsNextBus,
+    remainingSeconds
   ]);
 
   // Manual Nudge (+/- minutes)
@@ -488,7 +531,13 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
 
   // Current ETA of active route for live display
   const currentActiveRouteInfo = availableRoutes.find(r => r.route === activeRoute);
-  const currentLiveEta = currentActiveRouteInfo?.minutes ?? lastSyncedBusEta;
+  const currentLiveEta = useMemo(() => {
+    if (!currentActiveRouteInfo) return lastSyncedBusEta;
+    if (!targetIsNextBus && currentActiveRouteInfo.isNextBus && currentActiveRouteInfo.firstMinutes !== null && currentActiveRouteInfo.firstMinutes !== undefined) {
+      return currentActiveRouteInfo.firstMinutes;
+    }
+    return currentActiveRouteInfo.minutes ?? lastSyncedBusEta;
+  }, [currentActiveRouteInfo, targetIsNextBus, lastSyncedBusEta]);
 
   return (
     <div className="w-full mb-3">
@@ -637,13 +686,13 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
 
           {/* Lock Banner for <= 2 minutes */}
           {remainingSeconds <= 120 && lastTriggerMode !== 'test' && (
-            <div className="mb-3 p-2.5 rounded-xl text-xs font-bold bg-amber-400/20 border border-amber-300/40 text-amber-100 flex items-center justify-between gap-2 shadow-inner">
+            <div className="mb-3 p-2.5 rounded-xl text-xs font-bold bg-amber-400/25 border border-amber-300/50 text-amber-100 flex items-center justify-between gap-2 shadow-inner">
               <div className="flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-amber-300 shrink-0" />
-                <span>⚡ 已進入最後 2 分鐘：已停止到站時間調節，鎖定強制倒數出門！</span>
+                <span>⚡ 倒數已小於 2 分鐘：已停止調節到站時間，鎖定強制倒數，時間到達必定響鈴！</span>
               </div>
-              <span className="text-[10px] bg-amber-300/20 text-amber-200 px-1.5 py-0.5 rounded border border-amber-300/30 shrink-0 font-extrabold">
-                鎖定進行中
+              <span className="text-[10px] bg-amber-300/30 text-amber-200 px-2 py-0.5 rounded border border-amber-300/40 shrink-0 font-black">
+                🔒 鎖定進行中
               </span>
             </div>
           )}
@@ -836,7 +885,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
             <div className="flex items-center gap-2 self-start sm:self-center shrink-0 flex-wrap">
               {isEarliestOverLead && earliestRoute && (
                 <button
-                  onClick={() => startTimer(targetCountdownMinutes, earliestRoute, false)}
+                  onClick={() => startTimer(targetCountdownMinutes, earliestRoute, false, Boolean(earliestIsNextBus))}
                   className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-black text-sm rounded-xl shadow-md shadow-amber-600/20 flex items-center gap-1.5 transition-all cursor-pointer ring-2 ring-amber-400"
                 >
                   <Play className="w-4 h-4 fill-white" />
@@ -874,7 +923,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
                     return (
                       <button
                         key={r.route}
-                        onClick={() => startTimer(cMins, r.route, false)}
+                        onClick={() => startTimer(cMins, r.route, false, Boolean(r.isNextBus))}
                         className="text-[11px] bg-white border border-slate-300 hover:border-blue-500 text-blue-700 font-bold px-2 py-0.5 rounded-lg transition-all cursor-pointer"
                       >
                         【{r.route}{r.isNextBus ? '(下班)' : ''}】{r.minutes}分 ➜ 倒數{cMins}分
