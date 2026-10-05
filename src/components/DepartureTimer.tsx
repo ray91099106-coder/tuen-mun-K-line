@@ -101,6 +101,14 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
 
     // If timer is running in normal route mode, seamlessly adjust remaining time
     if (isRunning && lastTriggerMode !== 'test' && mins !== oldLead) {
+      if (remainingSeconds <= 120) {
+        setLastCalibrateNotice({
+          type: 'manual',
+          message: `提前提醒設定已儲存為【${mins}分鐘】，本次最後 2 分鐘倒數保持鎖定進行`,
+          timestamp: new Date()
+        });
+        return;
+      }
       const diffMinutes = oldLead - mins; // e.g. from 8m to 7m -> +1m countdown; from 8m to 9m -> -1m countdown
       adjustRemainingMinutes(diffMinutes);
       setLastCalibrateNotice({
@@ -326,6 +334,15 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
       return;
     }
 
+    const now = Date.now();
+    const secsLeft = Math.max(0, Math.round((targetAlarmTimestamp - now) / 1000));
+
+    // 🔒 當計時器倒數至小於等於 2 分鐘 (120 秒) 時，停止更新計時器調節到站時間，強制倒數下去
+    // 避免計時器發現到站時間小於預設時間被跳至下一班時間較長的班次，導致計時器永遠無法響起
+    if (secsLeft <= 120 || remainingSeconds <= 120) {
+      return;
+    }
+
     // Locate the active route in live availableRoutes
     let currentBusInfo = availableRoutes.find(r => r.route === activeRoute);
     if (!currentBusInfo && (activeRoute === '首班車' || activeRoute === '往屯門')) {
@@ -337,7 +354,12 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
     if (!currentBusInfo || currentBusInfo.minutes === null) return;
 
     const currentBusEta = currentBusInfo.minutes;
-    const now = Date.now();
+
+    // 🛡️ 防跳班保護：若最新 ETA 突然大幅增加 (例如相差 4 分鐘以上)，
+    // 說明首班車已進入出門提醒時間或到站，availableRoutes 已跳轉至下一班車，絕不可向後延長倒數時間！
+    if (lastSyncedBusEta !== null && (currentBusEta - lastSyncedBusEta) >= 4) {
+      return;
+    }
 
     // Condition 1: Bus is already within lead time (e.g. <= 8 min)
     if (currentBusEta <= leadMinutes) {
@@ -427,6 +449,14 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
 
   // Immediate manual refresh & calibrate
   const handleForceCalibrate = async () => {
+    if (remainingSeconds <= 120) {
+      setLastCalibrateNotice({
+        type: 'sync',
+        message: `🔒 倒數已進入最後 2 分鐘，已鎖定強制倒數出門，不再調節時間`,
+        timestamp: new Date()
+      });
+      return;
+    }
     if (onRefresh) {
       await onRefresh();
     }
@@ -513,18 +543,28 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
             {/* Auto-calibration badge & toggle */}
             {lastTriggerMode !== 'test' && (
               <div className="flex items-center gap-1.5 ml-auto">
-                <button
-                  onClick={() => setAutoCalibrate(prev => !prev)}
-                  className={`text-[11px] px-2 py-0.5 rounded-full font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                    autoCalibrate 
-                      ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 hover:bg-emerald-500/30' 
-                      : 'bg-white/10 text-slate-300 border border-white/20 hover:bg-white/20'
-                  }`}
-                  title={autoCalibrate ? '已啟用路況自動校準：每30秒跟隨巴士即時情況調校倒數' : '點擊啟用路況自動校準'}
-                >
-                  <Activity className={`w-3 h-3 ${autoCalibrate ? 'text-emerald-300 animate-pulse' : 'text-slate-400'}`} />
-                  {autoCalibrate ? '實時路況校準中' : '自動校準已關閉'}
-                </button>
+                {remainingSeconds <= 120 ? (
+                  <span 
+                    className="text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-amber-400/25 text-amber-200 border border-amber-300/50 flex items-center gap-1 shadow-xs"
+                    title="倒數少於2分鐘：已停止調節到站時間，鎖定強制倒數出門"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+                    最後2分鐘鎖定
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setAutoCalibrate(prev => !prev)}
+                    className={`text-[11px] px-2 py-0.5 rounded-full font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                      autoCalibrate 
+                        ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 hover:bg-emerald-500/30' 
+                        : 'bg-white/10 text-slate-300 border border-white/20 hover:bg-white/20'
+                    }`}
+                    title={autoCalibrate ? '已啟用路況自動校準：每30秒跟隨巴士即時情況調校倒數' : '點擊啟用路況自動校準'}
+                  >
+                    <Activity className={`w-3 h-3 ${autoCalibrate ? 'text-emerald-300 animate-pulse' : 'text-slate-400'}`} />
+                    {autoCalibrate ? '實時路況校準中' : '自動校準已關閉'}
+                  </button>
+                )}
 
                 <button
                   onClick={cancelTimer}
@@ -592,6 +632,19 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
                 <span>{lastCalibrateNotice.message}</span>
               </div>
               <span className="text-[10px] text-blue-200/70 shrink-0">剛才</span>
+            </div>
+          )}
+
+          {/* Lock Banner for <= 2 minutes */}
+          {remainingSeconds <= 120 && lastTriggerMode !== 'test' && (
+            <div className="mb-3 p-2.5 rounded-xl text-xs font-bold bg-amber-400/20 border border-amber-300/40 text-amber-100 flex items-center justify-between gap-2 shadow-inner">
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-amber-300 shrink-0" />
+                <span>⚡ 已進入最後 2 分鐘：已停止到站時間調節，鎖定強制倒數出門！</span>
+              </div>
+              <span className="text-[10px] bg-amber-300/20 text-amber-200 px-1.5 py-0.5 rounded border border-amber-300/30 shrink-0 font-extrabold">
+                鎖定進行中
+              </span>
             </div>
           )}
 
