@@ -32,15 +32,21 @@ export default function App() {
   const [activeTimerRoute, setActiveTimerRoute] = useState<string | null>(null);
   const [leadMinutes, setLeadMinutes] = useState<number>(() => {
     try {
+      const version = localStorage.getItem('bus_reminder_lead_version_tm');
+      if (version !== '2') {
+        localStorage.setItem('bus_reminder_lead_version_tm', '2');
+        localStorage.setItem('bus_reminder_lead_minutes', '9');
+        return 9;
+      }
       const saved = localStorage.getItem('bus_reminder_lead_minutes');
       if (saved) {
         const parsed = parseInt(saved, 10);
-        if ([7, 8, 9].includes(parsed)) return parsed;
+        if ([8, 9, 10].includes(parsed)) return parsed;
       }
     } catch (e) {
       // ignore
     }
-    return 8;
+    return 9;
   });
 
   const [kowloonLeadMinutes, setKowloonLeadMinutes] = useState<number>(() => {
@@ -563,6 +569,8 @@ export default function App() {
       <div className="p-4 space-y-4">
         {/* Departure Timer Widget for 往屯門 */}
         <DepartureTimer
+          title="往屯門出門提醒計時器"
+          targetDestination="往屯門"
           earliestRoute={earliestPinnedArrival?.route ?? null}
           earliestMinutes={earliestPinnedArrival?.minutes ?? null}
           earliestIsNextBus={earliestPinnedArrival?.isNextBus}
@@ -571,6 +579,9 @@ export default function App() {
           onActiveRouteChange={setActiveTimerRoute}
           leadMinutes={leadMinutes}
           onLeadMinutesChange={setLeadMinutes}
+          leadMinutesOptions={[8, 9, 10]}
+          recommendedLeadMinutes={9}
+          storageKey="bus_reminder_lead_minutes"
           onRefresh={refreshAll}
           isRefreshing={loading}
           lastUpdated={lastUpdated}

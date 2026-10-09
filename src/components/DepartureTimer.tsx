@@ -67,8 +67,8 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
   onActiveRouteChange,
   leadMinutes: propLeadMinutes,
   onLeadMinutesChange,
-  leadMinutesOptions = [7, 8, 9],
-  recommendedLeadMinutes = 8,
+  leadMinutesOptions = [8, 9, 10],
+  recommendedLeadMinutes = 9,
   storageKey = 'bus_reminder_lead_minutes',
 }) => {
   // Configuration
@@ -650,7 +650,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
                           }`}
                           title={`切換為到站前 ${mins} 分鐘提醒出門`}
                         >
-                          {mins}分{mins === recommendedLeadMinutes ? '(推薦)' : ''}
+                          {mins}分{mins === recommendedLeadMinutes ? '(預設)' : ''}
                         </button>
                       ))}
                     </div>
@@ -874,7 +874,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
                           : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-blue-400'
                       }`}
                     >
-                      {mins}分鐘{mins === recommendedLeadMinutes ? '（推薦）' : ''}
+                      {mins}分鐘{mins === recommendedLeadMinutes ? '（預設）' : ''}
                     </button>
                   ))}
                 </div>
