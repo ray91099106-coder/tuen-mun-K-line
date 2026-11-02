@@ -11,8 +11,36 @@ import { fetchAllETA, STOPS } from './services/busService';
 import { DepartureTimer } from './components/DepartureTimer';
 
 export default function App() {
-  const [arrivals, setArrivals] = useState<Record<string, BusArrival[]>>({});
-  const [loading, setLoading] = useState<boolean>(true);
+  const [arrivals, setArrivals] = useState<Record<string, BusArrival[]>>(() => {
+    try {
+      const cached = localStorage.getItem('cached_bus_arrivals');
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (e) {
+      // ignore
+    }
+    return {};
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      return !localStorage.getItem('cached_bus_arrivals');
+    } catch (e) {
+      return true;
+    }
+  });
+  const [pinnedLoading, setPinnedLoading] = useState<boolean>(() => {
+    try {
+      const cached = localStorage.getItem('cached_bus_arrivals');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Object.keys(parsed).some(k => k.includes('K51') || k.includes('61M'))) {
+          return false;
+        }
+      }
+    } catch (e) {}
+    return true;
+  });
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [error, setError] = useState<string | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -326,13 +354,29 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const newArrivals = await fetchAllETA(STOPS);
+      const newArrivals = await fetchAllETA(STOPS, (partialArrivals) => {
+        setArrivals(prev => {
+          const merged = { ...prev, ...partialArrivals };
+          try {
+            localStorage.setItem('cached_bus_arrivals', JSON.stringify(merged));
+          } catch (e) {}
+          return merged;
+        });
+        // Clear pinnedLoading as soon as pinned arrivals are received
+        if (Object.keys(partialArrivals).some(k => k.includes('K51') || k.includes('61M') || k.includes('52X'))) {
+          setPinnedLoading(false);
+        }
+      });
       setArrivals(newArrivals);
       setLastUpdated(new Date());
+      try {
+        localStorage.setItem('cached_bus_arrivals', JSON.stringify(newArrivals));
+      } catch (e) {}
     } catch (err) {
       setError('無法獲取到站時間，請稍後再試。');
     } finally {
       setLoading(false);
+      setPinnedLoading(false);
     }
   }, []);
 
@@ -597,7 +641,7 @@ export default function App() {
         </div>
       </div>
       
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {isPinnedOpen && (
           <motion.div 
             initial={{ height: 0, opacity: 0 }}
@@ -622,7 +666,7 @@ export default function App() {
           recommendedLeadMinutes={9}
           storageKey="bus_reminder_lead_minutes"
           onRefresh={refreshAll}
-          isRefreshing={loading}
+          isRefreshing={pinnedLoading && loading}
           lastUpdated={lastUpdated}
         />
 
@@ -671,7 +715,7 @@ export default function App() {
                 </div>
 
                 <div className="mt-0.5 w-full">
-                  {loading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
+                  {pinnedLoading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
                     <div className="w-8 h-4 bg-slate-200 animate-pulse rounded mx-auto" />
                   ) : arrival ? (
                     arrival.remainingMinutes !== null ? (
@@ -777,7 +821,7 @@ export default function App() {
                   )}
                 </div>
                 <div>
-                  {loading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
+                  {pinnedLoading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
                     <div className="w-8 h-4 bg-slate-200 animate-pulse rounded" />
                   ) : arrival ? (
                     arrival.remainingMinutes !== null ? (
@@ -1400,52 +1444,39 @@ export default function App() {
     </section>
   );
 
-  const orderedSections = useMemo(() => {
-    if (isHuanggangOpen) {
-      return [
-        { key: 'huanggang', render: renderHuanggangSection },
-        { key: 'pinned', render: renderPinnedSection },
-        { key: 'shenzhen', render: renderShenzhenSection },
-        { key: 'kowloon', render: renderKowloonSection },
-        { key: 'home', render: renderHomeSection },
-      ];
+  // Determine display order based on which section is currently opened
+  let sectionOrder: Array<'pinned' | 'home' | 'kowloon' | 'shenzhen' | 'huanggang'> = [
+    'pinned',
+    'home',
+    'kowloon',
+    'shenzhen',
+    'huanggang',
+  ];
+
+  if (isHuanggangOpen) {
+    sectionOrder = ['huanggang', 'pinned', 'shenzhen', 'kowloon', 'home'];
+  } else if (isShenzhenOpen) {
+    sectionOrder = ['shenzhen', 'pinned', 'huanggang', 'kowloon', 'home'];
+  } else if (isKowloonOpen) {
+    sectionOrder = ['kowloon', 'pinned', 'shenzhen', 'huanggang', 'home'];
+  } else if (isHomeOpen) {
+    sectionOrder = ['home', 'pinned', 'kowloon', 'shenzhen', 'huanggang'];
+  }
+
+  const renderSectionById = (id: 'pinned' | 'home' | 'kowloon' | 'shenzhen' | 'huanggang') => {
+    switch (id) {
+      case 'pinned':
+        return renderPinnedSection();
+      case 'home':
+        return renderHomeSection();
+      case 'kowloon':
+        return renderKowloonSection();
+      case 'shenzhen':
+        return renderShenzhenSection();
+      case 'huanggang':
+        return renderHuanggangSection();
     }
-    if (isShenzhenOpen) {
-      return [
-        { key: 'shenzhen', render: renderShenzhenSection },
-        { key: 'pinned', render: renderPinnedSection },
-        { key: 'huanggang', render: renderHuanggangSection },
-        { key: 'kowloon', render: renderKowloonSection },
-        { key: 'home', render: renderHomeSection },
-      ];
-    }
-    if (isKowloonOpen) {
-      return [
-        { key: 'kowloon', render: renderKowloonSection },
-        { key: 'pinned', render: renderPinnedSection },
-        { key: 'shenzhen', render: renderShenzhenSection },
-        { key: 'huanggang', render: renderHuanggangSection },
-        { key: 'home', render: renderHomeSection },
-      ];
-    }
-    if (isHomeOpen) {
-      return [
-        { key: 'home', render: renderHomeSection },
-        { key: 'pinned', render: renderPinnedSection },
-        { key: 'kowloon', render: renderKowloonSection },
-        { key: 'shenzhen', render: renderShenzhenSection },
-        { key: 'huanggang', render: renderHuanggangSection },
-      ];
-    }
-    // Default (isPinnedOpen or all closed): 往屯門 (去屯門) first
-    return [
-      { key: 'pinned', render: renderPinnedSection },
-      { key: 'home', render: renderHomeSection },
-      { key: 'kowloon', render: renderKowloonSection },
-      { key: 'shenzhen', render: renderShenzhenSection },
-      { key: 'huanggang', render: renderHuanggangSection },
-    ];
-  }, [isHuanggangOpen, isShenzhenOpen, isKowloonOpen, isHomeOpen, isPinnedOpen]);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
@@ -1464,8 +1495,8 @@ export default function App() {
         )}
 
         {/* Dynamic section display order: Opened section data is displayed first */}
-        {orderedSections.map((sec) => (
-          <div key={sec.key}>{sec.render()}</div>
+        {sectionOrder.map((id) => (
+          <div key={id}>{renderSectionById(id)}</div>
         ))}
 
       </div>

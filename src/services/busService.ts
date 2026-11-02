@@ -307,7 +307,21 @@ export const STOPS: StopInfo[] = [
   },
 ];
 
-export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, BusArrival[]>> {
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 6000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timer);
+    return res;
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
+export async function fetchETAForStops(stops: StopInfo[]): Promise<Record<string, BusArrival[]>> {
+  if (stops.length === 0) return {};
   const now = new Date();
   const results: Record<string, BusArrival[]> = {};
 
@@ -320,7 +334,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
   // Fetch KMB data
   const kmbPromises = kmbStopIds.map(async (stopId) => {
     try {
-      const response = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${stopId}`);
+      const response = await fetchWithTimeout(`https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${stopId}`);
       const data: KMBETAResponse = await response.json();
       return { stopId, data: data.data || [] };
     } catch (error) {
@@ -332,7 +346,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
   // Fetch MTRB data
   const mtrbPromises = mtrbRoutes.map(async (route) => {
     try {
-      const response = await fetch('https://rt.data.gov.hk/v1/transport/mtr/bus/getSchedule', {
+      const response = await fetchWithTimeout('https://rt.data.gov.hk/v1/transport/mtr/bus/getSchedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ routeName: route, language: 'zh' }),
@@ -348,7 +362,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
   // Fetch CTB data
   const ctbPromises = ctbStops.map(async (stop) => {
     try {
-      const response = await fetch(`https://rt.data.gov.hk/v1/transport/citybus-nwfb/eta/CTB/${stop.id}/${stop.route}`);
+      const response = await fetchWithTimeout(`https://rt.data.gov.hk/v1/transport/citybus-nwfb/eta/CTB/${stop.id}/${stop.route}`);
       const data = await response.json();
       return { key: `${stop.id}-${stop.route}`, data: data.data || [] };
     } catch (error) {
@@ -367,7 +381,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
         '44B': '2004164',
       };
       const routeId = routeIdMap[stop.route] || stop.route;
-      const response = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/${routeId}/${stop.id}`);
+      const response = await fetchWithTimeout(`https://data.etagmb.gov.hk/eta/route-stop/${routeId}/${stop.id}`);
       const data = await response.json();
       let stopData = data.data || [];
 
@@ -376,7 +390,7 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
         const targetSeq = stop.bound ? stopData.find((d: any) => d.route_seq === Number(stop.bound)) : stopData[0];
         if (!targetSeq || !targetSeq.eta || targetSeq.eta.length === 0) {
           try {
-            const n44bRes = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/2004165/${stop.id}`);
+            const n44bRes = await fetchWithTimeout(`https://data.etagmb.gov.hk/eta/route-stop/2004165/${stop.id}`, {}, 3000);
             const n44bData = await n44bRes.json();
             if (n44bData.data && n44bData.data.length > 0) {
               stopData = n44bData.data;
@@ -511,4 +525,31 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
   });
 
   return results;
+}
+
+export async function fetchAllETA(
+  stops: StopInfo[],
+  onPartialUpdate?: (partial: Record<string, BusArrival[]>) => void
+): Promise<Record<string, BusArrival[]>> {
+  const pinnedStops = stops.filter(s => s.category === 'pinned');
+  const otherStops = stops.filter(s => s.category !== 'pinned');
+
+  // If progressive callback is provided and we have both pinned and other stops:
+  // Fetch pinned ('往屯門') stops FIRST with top priority so they appear in ~300-500ms!
+  if (onPartialUpdate && pinnedStops.length > 0 && otherStops.length > 0) {
+    const pinnedPromise = fetchETAForStops(pinnedStops).then(pinnedData => {
+      onPartialUpdate(pinnedData);
+      return pinnedData;
+    });
+
+    const otherPromise = fetchETAForStops(otherStops).then(otherData => {
+      onPartialUpdate(otherData);
+      return otherData;
+    });
+
+    const [pinnedData, otherData] = await Promise.all([pinnedPromise, otherPromise]);
+    return { ...pinnedData, ...otherData };
+  }
+
+  return fetchETAForStops(stops);
 }
