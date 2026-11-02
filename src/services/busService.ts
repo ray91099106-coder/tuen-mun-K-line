@@ -245,6 +245,66 @@ export const STOPS: StopInfo[] = [
     operator: 'CTB',
     category: 'shenzhen',
   },
+  // 皇崗口岸 (Huanggang Port) - 去口岸開車時間 (往皇崗口岸)
+  {
+    id: '20001319',
+    name: '屯門鄉事會路，市中心輕鐵站外',
+    route: '44B1',
+    bound: '2',
+    operator: 'GMB',
+    category: 'huanggang',
+    subCategory: 'to_port',
+    stopSeqDesc: '第11站 屯門鄉事會路，市中心輕鐵站外',
+  },
+  {
+    id: '20001311',
+    name: '屯門站公共運輸交匯處',
+    route: '44B',
+    bound: '2',
+    operator: 'GMB',
+    category: 'huanggang',
+    subCategory: 'to_port',
+    stopSeqDesc: '第一站 屯門站公共運輸交匯處',
+  },
+  {
+    id: '003198',
+    name: '屯門市中心，1屯門鄉事會路',
+    route: 'B15',
+    bound: 'I',
+    operator: 'CTB',
+    category: 'huanggang',
+    subCategory: 'to_port',
+    stopSeqDesc: '第9站 屯門市中心，1屯門鄉事會路',
+  },
+
+  // 皇崗口岸 (Huanggang Port) - 口岸開出時間 (往屯門)
+  {
+    id: '20023758',
+    name: '皇崗口岸總站',
+    route: '44B1',
+    bound: '1',
+    operator: 'GMB',
+    category: 'huanggang',
+    subCategory: 'from_port',
+  },
+  {
+    id: '20023758',
+    name: '皇崗口岸總站',
+    route: '44B',
+    bound: '1',
+    operator: 'GMB',
+    category: 'huanggang',
+    subCategory: 'from_port',
+  },
+  {
+    id: '003939',
+    name: '皇崗口岸總站',
+    route: 'B15',
+    bound: 'O',
+    operator: 'CTB',
+    category: 'huanggang',
+    subCategory: 'from_port',
+  },
 ];
 
 export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, BusArrival[]>> {
@@ -302,12 +362,32 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
     try {
       // Map route names to GMB route IDs
       const routeIdMap: Record<string, string> = {
-        '140M': '2004598'
+        '140M': '2004598',
+        '44B1': '2004197',
+        '44B': '2004164',
       };
       const routeId = routeIdMap[stop.route] || stop.route;
       const response = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/${routeId}/${stop.id}`);
       const data = await response.json();
-      return { key: `${stop.id}-${stop.route}`, data: data.data || [] };
+      let stopData = data.data || [];
+
+      // If 44B daytime has no active ETAs (e.g. night hours 23:00-06:30), check overnight N44B (routeId 2004165)
+      if (stop.route === '44B') {
+        const targetSeq = stop.bound ? stopData.find((d: any) => d.route_seq === Number(stop.bound)) : stopData[0];
+        if (!targetSeq || !targetSeq.eta || targetSeq.eta.length === 0) {
+          try {
+            const n44bRes = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/2004165/${stop.id}`);
+            const n44bData = await n44bRes.json();
+            if (n44bData.data && n44bData.data.length > 0) {
+              stopData = n44bData.data;
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+
+      return { key: `${stop.id}-${stop.route}`, data: stopData };
     } catch (error) {
       console.error(`GMB API Error for ${stop.route}:`, error);
       return { key: `${stop.id}-${stop.route}`, data: [] };
@@ -387,9 +467,13 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
       results[key] = filtered.map((item: any) => {
         const etaDate = item.eta ? new Date(item.eta) : null;
         const diff = etaDate ? Math.floor((etaDate.getTime() - now.getTime()) / 60000) : null;
+        let dest = item.dest_tc;
+        if (!dest && stop.route === 'B15') {
+          dest = stop.bound === 'I' ? '皇崗口岸' : '青山灣';
+        }
         return {
           route: item.route,
-          destination: item.dest_tc,
+          destination: dest || '',
           eta: item.eta,
           remainingMinutes: diff !== null ? Math.max(0, diff) : null,
           remark: item.rmk_tc || '',
@@ -411,9 +495,13 @@ export async function fetchAllETA(stops: StopInfo[]): Promise<Record<string, Bus
       results[key] = etas.map((etaObj) => {
         const etaDate = new Date(etaObj.timestamp);
         const diff = Math.floor((etaDate.getTime() - now.getTime()) / 60000);
+        let destination = '未知';
+        if (stop.route === '140M') destination = '青衣站';
+        else if (stop.route === '44B1') destination = stop.bound === '2' ? '皇崗口岸' : '屯門碼頭';
+        else if (stop.route === '44B') destination = stop.bound === '2' ? '皇崗口岸' : '屯門站';
         return {
           route: stop.route,
-          destination: stop.route === '140M' ? '青衣站' : '未知',
+          destination,
           eta: etaObj.timestamp,
           remainingMinutes: Math.max(0, diff),
           remark: etaObj.remark,

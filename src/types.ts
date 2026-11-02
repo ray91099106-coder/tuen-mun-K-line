@@ -17,7 +17,9 @@ export interface StopInfo {
   route: string;
   bound: string;
   operator: 'KMB' | 'MTRB' | 'CTB' | 'GMB';
-  category?: 'home' | 'pinned' | 'others' | 'kowloon' | 'shenzhen';
+  category?: 'home' | 'pinned' | 'others' | 'kowloon' | 'shenzhen' | 'huanggang';
+  subCategory?: 'to_port' | 'from_port';
+  stopSeqDesc?: string;
   lat?: number;
   lng?: number;
 }

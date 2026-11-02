@@ -16,9 +16,11 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [error, setError] = useState<string | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [isPinnedOpen, setIsPinnedOpen] = useState<boolean>(true);
   const [isHomeOpen, setIsHomeOpen] = useState<boolean>(false);
   const [isKowloonOpen, setIsKowloonOpen] = useState<boolean>(false);
   const [isShenzhenOpen, setIsShenzhenOpen] = useState<boolean>(false);
+  const [isHuanggangOpen, setIsHuanggangOpen] = useState<boolean>(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [nearestArea, setNearestArea] = useState<string | null>(null);
   const [hasAutoOpened, setHasAutoOpened] = useState<boolean>(false);
@@ -66,6 +68,13 @@ export default function App() {
     const stop = pinnedStops.find(s => s.route === route);
     const routeArrivals = stop ? arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === route) || [] : [];
     const first = routeArrivals[0];
+
+    // Ensure 往屯門 section is expanded
+    setIsPinnedOpen(true);
+    setIsHomeOpen(false);
+    setIsKowloonOpen(false);
+    setIsShenzhenOpen(false);
+    setIsHuanggangOpen(false);
 
     // If caller explicitly clicked a minute that is > leadMinutes, use it
     if (clickedArrivalMinutes !== undefined && clickedArrivalMinutes !== null && clickedArrivalMinutes > leadMinutes) {
@@ -123,8 +132,10 @@ export default function App() {
 
     // Ensure Kowloon section is expanded
     setIsKowloonOpen(true);
+    setIsPinnedOpen(false);
     setIsHomeOpen(false);
     setIsShenzhenOpen(false);
+    setIsHuanggangOpen(false);
 
     // If caller explicitly clicked a minute that is > kowloonLeadMinutes, use it
     if (clickedArrivalMinutes !== undefined && clickedArrivalMinutes !== null && clickedArrivalMinutes > kowloonLeadMinutes) {
@@ -303,8 +314,10 @@ export default function App() {
 
     if (shouldAutoOpen && !hasAutoOpened) {
       setIsHomeOpen(true);
+      setIsPinnedOpen(false);
       setIsKowloonOpen(false);
       setIsShenzhenOpen(false);
+      setIsHuanggangOpen(false);
       setHasAutoOpened(true);
     }
   }, [userLocation, hasAutoOpened]);
@@ -359,6 +372,8 @@ export default function App() {
   const homeStops = STOPS.filter(s => s.category === 'home');
   const kowloonStops = STOPS.filter(s => s.category === 'kowloon');
   const shenzhenStops = STOPS.filter(s => s.category === 'shenzhen');
+  const huanggangToStops = STOPS.filter(s => s.category === 'huanggang' && s.subCategory === 'to_port');
+  const huanggangFromStops = STOPS.filter(s => s.category === 'huanggang' && s.subCategory === 'from_port');
 
   // Find earliest catchable arrival (> leadMinutes) among pinned routes ('往屯門')
   const earliestPinnedArrival = useMemo(() => {
@@ -559,14 +574,38 @@ export default function App() {
 
   const renderPinnedSection = () => (
     <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-      <div className="p-4 border-b border-slate-100 bg-blue-600 text-white flex items-center justify-between">
+      <div 
+        onClick={() => {
+          const next = !isPinnedOpen;
+          setIsPinnedOpen(next);
+          if (next) {
+            setIsHomeOpen(false);
+            setIsKowloonOpen(false);
+            setIsShenzhenOpen(false);
+            setIsHuanggangOpen(false);
+          }
+        }}
+        className="w-full p-4 border-b border-slate-100 bg-blue-600 text-white flex items-center justify-between hover:bg-blue-700 transition-colors cursor-pointer"
+      >
         <h2 className="text-lg font-bold flex items-center gap-2">
           <MapPin className="w-5 h-5" />
           往屯門
         </h2>
-        {!isHomeOpen ? <RefreshControl /> : <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">置頂路線</span>}
+        <div className="flex items-center gap-3">
+          {isPinnedOpen && <RefreshControl />}
+          {isPinnedOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </div>
       </div>
-      <div className="p-4 space-y-4">
+      
+      <AnimatePresence>
+        {isPinnedOpen && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="p-4 space-y-4">
         {/* Departure Timer Widget for 往屯門 */}
         <DepartureTimer
           title="往屯門出門提醒計時器"
@@ -773,6 +812,9 @@ export default function App() {
           })}
         </div>
       </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 
@@ -780,10 +822,15 @@ export default function App() {
     <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
       <div 
         onClick={() => {
-          setIsHomeOpen(!isHomeOpen);
-          if (!isHomeOpen) {
+          const next = !isHomeOpen;
+          setIsHomeOpen(next);
+          if (next) {
+            setIsPinnedOpen(false);
             setIsKowloonOpen(false);
             setIsShenzhenOpen(false);
+            setIsHuanggangOpen(false);
+          } else {
+            setIsPinnedOpen(true);
           }
         }}
         className="w-full p-4 border-b border-slate-100 bg-orange-500 text-white flex items-center justify-between hover:bg-orange-600 transition-colors cursor-pointer"
@@ -889,10 +936,15 @@ export default function App() {
     <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
       <div 
         onClick={() => {
-          setIsKowloonOpen(!isKowloonOpen);
-          if (!isKowloonOpen) {
+          const next = !isKowloonOpen;
+          setIsKowloonOpen(next);
+          if (next) {
+            setIsPinnedOpen(false);
             setIsHomeOpen(false);
             setIsShenzhenOpen(false);
+            setIsHuanggangOpen(false);
+          } else {
+            setIsPinnedOpen(true);
           }
         }}
         className="w-full p-4 border-b border-slate-100 bg-teal-600 text-white flex items-center justify-between hover:bg-teal-700 transition-colors cursor-pointer"
@@ -1066,10 +1118,15 @@ export default function App() {
     <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
       <div 
         onClick={() => {
-          setIsShenzhenOpen(!isShenzhenOpen);
-          if (!isShenzhenOpen) {
+          const next = !isShenzhenOpen;
+          setIsShenzhenOpen(next);
+          if (next) {
+            setIsPinnedOpen(false);
             setIsHomeOpen(false);
             setIsKowloonOpen(false);
+            setIsHuanggangOpen(false);
+          } else {
+            setIsPinnedOpen(true);
           }
         }}
         className="w-full p-4 border-b border-slate-100 bg-[#7700BB] text-white flex items-center justify-between hover:bg-[#6600AA] transition-colors cursor-pointer"
@@ -1144,6 +1201,252 @@ export default function App() {
     </section>
   );
 
+  const renderHuanggangSection = () => (
+    <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div 
+        onClick={() => {
+          const next = !isHuanggangOpen;
+          setIsHuanggangOpen(next);
+          if (next) {
+            setIsPinnedOpen(false);
+            setIsHomeOpen(false);
+            setIsKowloonOpen(false);
+            setIsShenzhenOpen(false);
+          } else {
+            setIsPinnedOpen(true);
+          }
+        }}
+        className="w-full p-4 border-b border-slate-100 bg-amber-600 text-white flex items-center justify-between hover:bg-amber-700 transition-colors cursor-pointer"
+      >
+        <h2 className="text-lg font-bold flex items-center gap-2">
+          <MapPin className="w-5 h-5" />
+          皇崗口岸
+        </h2>
+        <div className="flex items-center gap-3">
+          {isHuanggangOpen && <RefreshControl />}
+          {isHuanggangOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </div>
+      </div>
+      
+      <AnimatePresence>
+        {isHuanggangOpen && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="p-3 space-y-4">
+              {/* 1. 去口岸開車時間 (往皇崗口岸) - 放在口岸開出時間組合的上方作識別 */}
+              <div className="space-y-2 bg-amber-50/60 p-2.5 sm:p-3 rounded-xl border border-amber-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-600 animate-pulse" />
+                    <h3 className="text-sm font-bold border-l-4 border-amber-600 pl-2 text-slate-800">
+                      去口岸開車時間 (往皇崗口岸)
+                    </h3>
+                  </div>
+                  <span className="text-[10px] text-amber-800 font-bold bg-amber-100/90 px-2 py-0.5 rounded">
+                    屯門各站開出
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  {huanggangToStops.map((stop) => {
+                    const stopArrivals = arrivals[`${stop.id}-${stop.route}`] || [];
+                    const displayArrivals = stopArrivals.slice(0, 2);
+                    const firstArrival = displayArrivals[0];
+                    const styles = getKowloonStyles(firstArrival?.remainingMinutes ?? null);
+
+                    const typeBadge = stop.operator === 'GMB' ? '小巴' : '巴士';
+                    const routeLabel = stop.route;
+
+                    let stationTitle = '';
+                    let stationDetail = '';
+                    if (stop.route === '44B1') {
+                      stationTitle = '第11站 市中心輕鐵站外';
+                      stationDetail = '屯門鄉事會路';
+                    } else if (stop.route === '44B') {
+                      stationTitle = '第一站 屯門站總站';
+                      stationDetail = '公共運輸交匯處';
+                    } else {
+                      stationTitle = '第9站 屯門市中心';
+                      stationDetail = '1屯門鄉事會路';
+                    }
+
+                    return (
+                      <div key={`${stop.id}-${stop.route}`} className={`bg-white border rounded-xl p-2 sm:p-2.5 flex flex-col items-center shadow-sm transition-all ${styles.border}`}>
+                        <div className="flex flex-col items-center mb-1.5 w-full text-center">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1 py-0.2 rounded leading-tight">
+                              {typeBadge}
+                            </span>
+                            <span className="text-base sm:text-lg font-black text-blue-700 leading-tight tracking-tight">
+                              {routeLabel}
+                            </span>
+                          </div>
+                          <span className="text-[9px] sm:text-[10px] font-bold text-slate-700 leading-tight mt-0.5 line-clamp-1" title={stop.stopSeqDesc || stop.name}>
+                            {stationTitle}
+                          </span>
+                          <span className="text-[8px] sm:text-[9px] text-slate-400 font-medium truncate max-w-full">
+                            {stationDetail}
+                          </span>
+                          <span className="text-[9px] font-bold text-emerald-700 mt-0.5">
+                            往 皇崗口岸
+                          </span>
+                        </div>
+                        
+                        <div className="flex flex-col items-center gap-1 w-full mt-auto">
+                          {loading && stopArrivals.length === 0 ? (
+                            <div className="w-12 h-6 bg-slate-200 animate-pulse rounded" />
+                          ) : displayArrivals.length > 0 ? (
+                            displayArrivals.map((arrival, idx) => (
+                              <div key={idx} className={`flex items-baseline gap-1 ${idx === 0 ? '' : 'opacity-60 border-t border-slate-100 w-full justify-center pt-1 mt-1'}`}>
+                                {arrival.remainingMinutes !== null ? (
+                                  <>
+                                    <span className={`${idx === 0 ? 'text-base' : 'text-sm'} font-black leading-none ${idx === 0 ? styles.text : 'text-slate-500'}`}>
+                                      {arrival.remainingMinutes}
+                                    </span>
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                                  </>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 font-bold">{arrival.remark || '暫無'}</span>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <span className="text-[10px] text-slate-300 font-bold italic">暫無</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. 口岸開出時間 (往屯門) */}
+              <div className="space-y-2 bg-slate-50/80 p-2.5 sm:p-3 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-slate-400" />
+                    <h3 className="text-sm font-bold border-l-4 border-slate-500 pl-2 text-slate-800">
+                      口岸開出時間 (往屯門)
+                    </h3>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-semibold bg-slate-200/70 px-2 py-0.5 rounded">
+                    皇崗口岸總站開出
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  {huanggangFromStops.map((stop) => {
+                    const stopArrivals = arrivals[`${stop.id}-${stop.route}`] || [];
+                    const displayArrivals = stopArrivals.slice(0, 2);
+                    const firstArrival = displayArrivals[0];
+                    const styles = getKowloonStyles(firstArrival?.remainingMinutes ?? null);
+
+                    const typeBadge = stop.operator === 'GMB' ? '小巴' : '巴士';
+                    const routeLabel = stop.route;
+                    const destLabel = stop.route === '44B1' ? '往 屯門碼頭' : stop.route === '44B' ? '往 屯門站' : '往 青山灣';
+
+                    return (
+                      <div key={`${stop.id}-${stop.route}`} className={`bg-white border rounded-xl p-2 sm:p-2.5 flex flex-col items-center shadow-sm transition-all ${styles.border}`}>
+                        <div className="flex flex-col items-center mb-1.5 w-full text-center">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1 py-0.2 rounded leading-tight">
+                              {typeBadge}
+                            </span>
+                            <span className="text-base sm:text-lg font-black text-blue-700 leading-tight tracking-tight">
+                              {routeLabel}
+                            </span>
+                          </div>
+                          <span className="text-[9px] sm:text-[10px] font-bold text-slate-600 leading-tight mt-0.5 truncate max-w-full">
+                            {destLabel}
+                          </span>
+                          <span className="text-[8px] sm:text-[9px] text-slate-400 font-medium">
+                            皇崗口岸總站
+                          </span>
+                        </div>
+                        
+                        <div className="flex flex-col items-center gap-1 w-full mt-auto">
+                          {loading && stopArrivals.length === 0 ? (
+                            <div className="w-12 h-6 bg-slate-200 animate-pulse rounded" />
+                          ) : displayArrivals.length > 0 ? (
+                            displayArrivals.map((arrival, idx) => (
+                              <div key={idx} className={`flex items-baseline gap-1 ${idx === 0 ? '' : 'opacity-60 border-t border-slate-100 w-full justify-center pt-1 mt-1'}`}>
+                                {arrival.remainingMinutes !== null ? (
+                                  <>
+                                    <span className={`${idx === 0 ? 'text-base' : 'text-sm'} font-black leading-none ${idx === 0 ? styles.text : 'text-slate-500'}`}>
+                                      {arrival.remainingMinutes}
+                                    </span>
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                                  </>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 font-bold">{arrival.remark || '暫無'}</span>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <span className="text-[10px] text-slate-300 font-bold italic">暫無</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+
+  const orderedSections = useMemo(() => {
+    if (isHuanggangOpen) {
+      return [
+        { key: 'huanggang', render: renderHuanggangSection },
+        { key: 'pinned', render: renderPinnedSection },
+        { key: 'shenzhen', render: renderShenzhenSection },
+        { key: 'kowloon', render: renderKowloonSection },
+        { key: 'home', render: renderHomeSection },
+      ];
+    }
+    if (isShenzhenOpen) {
+      return [
+        { key: 'shenzhen', render: renderShenzhenSection },
+        { key: 'pinned', render: renderPinnedSection },
+        { key: 'huanggang', render: renderHuanggangSection },
+        { key: 'kowloon', render: renderKowloonSection },
+        { key: 'home', render: renderHomeSection },
+      ];
+    }
+    if (isKowloonOpen) {
+      return [
+        { key: 'kowloon', render: renderKowloonSection },
+        { key: 'pinned', render: renderPinnedSection },
+        { key: 'shenzhen', render: renderShenzhenSection },
+        { key: 'huanggang', render: renderHuanggangSection },
+        { key: 'home', render: renderHomeSection },
+      ];
+    }
+    if (isHomeOpen) {
+      return [
+        { key: 'home', render: renderHomeSection },
+        { key: 'pinned', render: renderPinnedSection },
+        { key: 'kowloon', render: renderKowloonSection },
+        { key: 'shenzhen', render: renderShenzhenSection },
+        { key: 'huanggang', render: renderHuanggangSection },
+      ];
+    }
+    // Default (isPinnedOpen or all closed): 往屯門 (去屯門) first
+    return [
+      { key: 'pinned', render: renderPinnedSection },
+      { key: 'home', render: renderHomeSection },
+      { key: 'kowloon', render: renderKowloonSection },
+      { key: 'shenzhen', render: renderShenzhenSection },
+      { key: 'huanggang', render: renderHuanggangSection },
+    ];
+  }, [isHuanggangOpen, isShenzhenOpen, isKowloonOpen, isHomeOpen, isPinnedOpen]);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -1160,36 +1463,10 @@ export default function App() {
           </div>
         )}
 
-        {/* Stay on Top Logic */}
-        {isShenzhenOpen ? (
-          <>
-            {renderShenzhenSection()}
-            {renderKowloonSection()}
-            {renderHomeSection()}
-            {renderPinnedSection()}
-          </>
-        ) : isKowloonOpen ? (
-          <>
-            {renderKowloonSection()}
-            {renderShenzhenSection()}
-            {renderHomeSection()}
-            {renderPinnedSection()}
-          </>
-        ) : isHomeOpen ? (
-          <>
-            {renderHomeSection()}
-            {renderKowloonSection()}
-            {renderShenzhenSection()}
-            {renderPinnedSection()}
-          </>
-        ) : (
-          <>
-            {renderPinnedSection()}
-            {renderHomeSection()}
-            {renderKowloonSection()}
-            {renderShenzhenSection()}
-          </>
-        )}
+        {/* Dynamic section display order: Opened section data is displayed first */}
+        {orderedSections.map((sec) => (
+          <div key={sec.key}>{sec.render()}</div>
+        ))}
 
       </div>
     </div>
