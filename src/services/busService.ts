@@ -48,6 +48,30 @@ export const STOPS: StopInfo[] = [
     category: 'pinned',
   },
 
+  // 回家 (Home) - 站點 0：虹橋
+  {
+    id: 'K51-U065,6',
+    name: '虹橋(往置樂方向)',
+    route: 'K51',
+    bound: 'U',
+    operator: 'MTRB',
+    category: 'home',
+    stopSeqDesc: '第6站 景峰花園',
+    lat: 22.4032,
+    lng: 113.9782,
+  },
+  {
+    id: 'K51A-U060,6',
+    name: '虹橋(往置樂方向)',
+    route: 'K51A',
+    bound: 'U',
+    operator: 'MTRB',
+    category: 'home',
+    stopSeqDesc: '第6站 井財街',
+    lat: 22.4020,
+    lng: 113.9776,
+  },
+
   // 回家 (Home) - 站點 1：新墟
   {
     id: 'K51-U070,6',
@@ -452,8 +476,9 @@ export async function fetchETAForStops(stops: StopInfo[]): Promise<Record<string
       }
 
       results[key] = stopData.bus.map((item) => {
-        let remainingMinutes = item.departureTimeInSecond 
-          ? Math.floor(parseInt(item.departureTimeInSecond) / 60) 
+        const sec = item.departureTimeInSecond || item.arrivalTimeInSecond;
+        let remainingMinutes = sec 
+          ? Math.floor(parseInt(sec) / 60) 
           : null;
         
         if (remainingMinutes !== null && stop.route === 'K51') {
@@ -463,14 +488,14 @@ export async function fetchETAForStops(stops: StopInfo[]): Promise<Record<string
         }
         
         let destination = '未知目的地';
-        if (stop.route === 'K51') destination = '富泰 (Fu Tai)';
-        else if (stop.route === 'K53') destination = '屯門站 (Tuen Mun Station)';
-        else if (stop.route === 'K51A') destination = '富泰 (Fu Tai)';
+        if (stop.route === 'K51') destination = stop.bound === 'U' ? '大欖 (Tai Lam)' : '富泰 (Fu Tai)';
+        else if (stop.route === 'K53') destination = stop.bound === 'U' ? '掃管笏 (So Kwun Wat)' : '屯門站 (Tuen Mun Station)';
+        else if (stop.route === 'K51A') destination = stop.bound === 'U' ? '掃管笏 (So Kwun Wat)' : '富泰 (Fu Tai)';
 
         return {
           route: stop.route,
           destination,
-          eta: item.departureTimeText || '',
+          eta: item.departureTimeText || item.arrivalTimeText || '',
           remainingMinutes: remainingMinutes !== null ? Math.max(0, remainingMinutes) : null,
           remark: item.busRemark || '',
         };

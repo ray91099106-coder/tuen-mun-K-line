@@ -350,6 +350,7 @@ export default function App() {
     if (!userLocation) return;
 
     const areas = [
+      { name: '虹橋(往置樂方向)', lat: 22.4025, lng: 113.9778 },
       { name: '新墟(往置樂方向)', lat: 22.3983, lng: 113.9753 },
       { name: '屯門站(往置樂方向)', lat: 22.3946, lng: 113.9731 },
       { name: '市中心(往置樂方向)', lat: 22.3913, lng: 113.9755 },
@@ -609,7 +610,13 @@ export default function App() {
   }, [arrivals, kowloonStops, kowloonLeadMinutes]);
 
   // Group home stops by virtual stop name
-  const homeStopNames = ['新墟(往置樂方向)', '屯門站(往置樂方向)', '市中心(往置樂方向)', '華都(往置樂方向)'];
+  const homeStopNames = [
+    '虹橋(往置樂方向)',
+    '新墟(往置樂方向)',
+    '屯門站(往置樂方向)',
+    '市中心(往置樂方向)',
+    '華都(往置樂方向)'
+  ];
 
   const getPinnedStyles = (mins: number | null) => {
     if (mins === null) return { text: 'text-slate-300', border: 'border-slate-100' };
@@ -964,7 +971,9 @@ export default function App() {
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                       {stopsInGroup.map((stop) => {
-                        const arrival = arrivals[`${stop.id}-${stop.route}`]?.find(a => a.route === stop.route);
+                        const routeArrivals = arrivals[`${stop.id}-${stop.route}`]?.filter(a => a.route === stop.route) || [];
+                        const arrival = routeArrivals[0] || null;
+                        const nextArrival = routeArrivals[1] || null;
                         const styles = getHomeStyles(arrival?.remainingMinutes ?? null);
                         
                         // Check if can catch: walkingMins <= remainingMinutes <= walkingMins + 3
@@ -973,28 +982,62 @@ export default function App() {
                                         arrival.remainingMinutes >= walkingMins && 
                                         arrival.remainingMinutes <= walkingMins + 3;
 
+                        const isHungKiuK51 = stop.route === 'K51' && stop.name.includes('虹橋');
+
                         return (
-                          <div key={`${stop.id}-${stop.route}`} className={`bg-white border rounded-xl p-3 flex flex-col items-center shadow-sm transition-all ${canCatch ? 'border-green-500 border-2 ring-2 ring-green-100' : styles.border}`}>
-                            <div className="flex items-center gap-1 mb-1">
+                          <div key={`${stop.id}-${stop.route}`} className={`bg-white border rounded-xl p-2.5 sm:p-3 flex flex-col items-center shadow-sm transition-all ${canCatch ? 'border-green-500 border-2 ring-2 ring-green-100' : styles.border}`}>
+                            <div className="flex items-center gap-1 mb-0.5">
                               <span className="text-base font-black text-blue-700 leading-tight tracking-tight">{stop.route}</span>
                               {canCatch && <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping" />}
                             </div>
-                            <div className="flex items-baseline gap-1">
-                              {loading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
-                                <div className="w-6 h-4 bg-slate-200 animate-pulse rounded" />
-                              ) : arrival ? (
-                                arrival.remainingMinutes !== null ? (
-                                  <>
-                                    <span className={`text-base font-black leading-none ${styles.text}`}>
-                                      {arrival.remainingMinutes}
-                                    </span>
-                                    <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
-                                  </>
+                            {stop.stopSeqDesc && (
+                              <span className="text-[10px] text-slate-700 font-bold leading-tight text-center" title={stop.stopSeqDesc}>
+                                {stop.stopSeqDesc}
+                              </span>
+                            )}
+                            {stop.route === 'K51' && stop.name.includes('虹橋') && (
+                              <span className="text-[9px] text-emerald-700 font-bold mb-1">往大欖</span>
+                            )}
+                            {stop.route === 'K51A' && stop.name.includes('虹橋') && (
+                              <span className="text-[9px] text-emerald-700 font-bold mb-1">往掃管笏</span>
+                            )}
+                            <div className="flex flex-col items-center w-full mt-auto">
+                              <div className="flex items-baseline gap-1">
+                                {loading && (!stop || !arrivals[`${stop.id}-${stop.route}`]) ? (
+                                  <div className="w-6 h-4 bg-slate-200 animate-pulse rounded" />
+                                ) : arrival ? (
+                                  arrival.remainingMinutes !== null ? (
+                                    <>
+                                      <span className={`text-base font-black leading-none ${styles.text}`}>
+                                        {arrival.remainingMinutes}
+                                      </span>
+                                      <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 font-bold">{arrival.remark || '暫無'}</span>
+                                  )
                                 ) : (
-                                  <span className="text-[10px] text-slate-400 font-bold">{arrival.remark || '暫無'}</span>
-                                )
-                              ) : (
-                                <span className="text-[10px] text-slate-300 font-bold italic">暫無</span>
+                                  <span className="text-[10px] text-slate-300 font-bold italic">暫無</span>
+                                )}
+                              </div>
+
+                              {/* 虹橋 K51 下班車時間 */}
+                              {isHungKiuK51 && arrival && (
+                                <div className="mt-1.5 pt-1.5 border-t border-slate-100 w-full flex items-center justify-center gap-1">
+                                  <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-1 py-0.2 rounded">下班</span>
+                                  {nextArrival && nextArrival.remainingMinutes !== null ? (
+                                    <div className="flex items-baseline gap-0.5">
+                                      <span className="text-xs font-black text-slate-600">
+                                        {nextArrival.remainingMinutes}
+                                      </span>
+                                      <span className="text-[8px] font-bold text-slate-400 uppercase">分</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[9px] text-slate-400 font-medium">
+                                      {nextArrival?.remark || '暫無'}
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </div>
