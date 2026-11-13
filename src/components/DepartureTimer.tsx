@@ -540,7 +540,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
   }, [currentActiveRouteInfo, targetIsNextBus, lastSyncedBusEta]);
 
   return (
-    <div className="w-full mb-3">
+    <div translate="no" className="notranslate w-full mb-3">
       {/* 1. Alarm Alert Modal (when timer finishes) */}
       {isAlarmActive && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -554,7 +554,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
                 <>測試倒數已完成！響鈴功能正常運作。</>
               ) : (
                 <>
-                  【<strong className="text-blue-600 font-black">{activeRoute}</strong>】（{targetDestination || '往屯門'}）預計還有約 <strong className="text-red-600 font-black">{leadMinutes} 分鐘</strong> 抵達！
+                  【<strong translate="no" className="notranslate text-blue-600 font-black">{activeRoute}</strong>】（{targetDestination || '往屯門'}）預計還有約 <strong className="text-red-600 font-black">{leadMinutes} 分鐘</strong> 抵達！
                   <br /><span className="text-xs text-slate-500 mt-1 block">（已配合即時路況精準提醒）</span>
                 </>
               )}
@@ -656,7 +656,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
                     </div>
                     {currentLiveEta !== null && (
                       <span className="bg-blue-950/60 px-2 py-0.5 rounded-md border border-blue-400/30 font-semibold text-blue-200">
-                        🚌【{activeRoute}】最新到站：<strong className="text-amber-300">{currentLiveEta} 分鐘</strong>
+                        🚌【<span translate="no" className="notranslate">{activeRoute}</span>】最新到站：<strong className="text-amber-300">{currentLiveEta} 分鐘</strong>
                       </span>
                     )}
                   </>
@@ -839,7 +839,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
                 <div className="mt-1">
                   {isEarliestOverLead && earliestRoute ? (
                     <p className="text-sm font-black text-slate-800 leading-snug">
-                      首班可搭班次【<span className="text-blue-700 font-black">{earliestRoute}</span>】
+                      首班可搭班次【<span translate="no" className="notranslate text-blue-700 font-black">{earliestRoute}</span>】
                       {earliestIsNextBus && (
                         <span className="text-[11px] bg-amber-100 text-amber-900 border border-amber-300 font-bold px-1.5 py-0.5 rounded ml-1 inline-block">
                           下一班車
@@ -926,7 +926,7 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
                         onClick={() => startTimer(cMins, r.route, false, Boolean(r.isNextBus))}
                         className="text-[11px] bg-white border border-slate-300 hover:border-blue-500 text-blue-700 font-bold px-2 py-0.5 rounded-lg transition-all cursor-pointer"
                       >
-                        【{r.route}{r.isNextBus ? '(下班)' : ''}】{r.minutes}分 ➜ 倒數{cMins}分
+                        【<span translate="no" className="notranslate">{r.route}</span>{r.isNextBus ? '(下班)' : ''}】{r.minutes}分 ➜ 倒數{cMins}分
                       </button>
                     );
                   })}

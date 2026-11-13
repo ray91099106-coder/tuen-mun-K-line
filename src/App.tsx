@@ -750,7 +750,7 @@ export default function App() {
                 }
               >
                 <div className="flex items-center gap-1">
-                  <span className="text-base font-black text-blue-700 leading-tight">{route}</span>
+                  <span translate="no" className="notranslate text-base font-black text-blue-700 leading-tight">{route}</span>
                   {isThisRouteActive && (
                     <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
                   )}
@@ -855,7 +855,7 @@ export default function App() {
                 }
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="text-base font-black text-blue-700">{route}</span>
+                  <span translate="no" className="notranslate text-base font-black text-blue-700">{route}</span>
                   {isThisRouteActive && (
                     <span className="text-[9px] bg-amber-500 text-white font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shadow-xs animate-pulse">
                       <Clock className="w-2.5 h-2.5" /> 倒數中
@@ -987,7 +987,7 @@ export default function App() {
                         return (
                           <div key={`${stop.id}-${stop.route}`} className={`bg-white border rounded-xl p-2.5 sm:p-3 flex flex-col items-center shadow-sm transition-all ${canCatch ? 'border-green-500 border-2 ring-2 ring-green-100' : styles.border}`}>
                             <div className="flex items-center gap-1 mb-0.5">
-                              <span className="text-base font-black text-blue-700 leading-tight tracking-tight">{stop.route}</span>
+                              <span translate="no" className="notranslate text-base font-black text-blue-700 leading-tight tracking-tight">{stop.route}</span>
                               {canCatch && <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping" />}
                             </div>
                             {stop.stopSeqDesc && (
@@ -1157,7 +1157,7 @@ export default function App() {
                         }
                       >
                         <div className="flex items-center gap-1">
-                          <span className="text-base font-black text-teal-800 leading-tight">{stop.route}</span>
+                          <span translate="no" className="notranslate text-base font-black text-teal-800 leading-tight">{stop.route}</span>
                           {isThisRouteActive && (
                             <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
                           )}
@@ -1286,7 +1286,7 @@ export default function App() {
                     return (
                       <div key={`${stop.id}-${stop.route}`} className={`bg-slate-50 border rounded-xl p-3 flex flex-col items-center shadow-sm transition-all ${styles.border}`}>
                         <div className="flex items-center gap-1 mb-1">
-                          <span className="text-base font-black text-blue-700 leading-tight tracking-tight">{stop.route}</span>
+                          <span translate="no" className="notranslate text-base font-black text-blue-700 leading-tight tracking-tight">{stop.route}</span>
                         </div>
                         
                         <div className="flex flex-col items-center gap-1 w-full">
@@ -1435,7 +1435,7 @@ export default function App() {
                               <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1 py-0.2 rounded leading-tight">
                                 {typeBadge}
                               </span>
-                              <span className="text-base sm:text-lg font-black text-blue-700 leading-tight tracking-tight">
+                              <span translate="no" className="notranslate text-base sm:text-lg font-black text-blue-700 leading-tight tracking-tight">
                                 {routeLabel}
                               </span>
                             </div>
@@ -1538,7 +1538,7 @@ export default function App() {
                               <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1 py-0.2 rounded leading-tight">
                                 {typeBadge}
                               </span>
-                              <span className="text-base sm:text-lg font-black text-blue-700 leading-tight tracking-tight">
+                              <span translate="no" className="notranslate text-base sm:text-lg font-black text-blue-700 leading-tight tracking-tight">
                                 {routeLabel}
                               </span>
                             </div>
@@ -1620,7 +1620,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
+    <div translate="no" className="notranslate min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
         {error && (
           <div className="bg-red-50 border border-red-100 p-4 rounded-xl flex items-center gap-3 text-red-700">
