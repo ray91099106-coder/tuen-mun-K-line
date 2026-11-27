@@ -7,8 +7,12 @@ export interface BusArrival {
   route: string;
   destination: string;
   eta: string | null;
+  etaTimestampMs?: number;
   remainingMinutes: number | null;
   remark: string;
+  isScheduled?: boolean;
+  isDelayed?: boolean;
+  statusRemark?: string;
 }
 
 export interface StopInfo {
@@ -42,17 +46,43 @@ export interface CTBETAResponse {
   }>;
 }
 
+export type SectionCategory = 'pinned' | 'home' | 'kowloon' | 'shenzhen' | 'huanggang';
+
+export type KeyStatus = 'ok' | 'delayed' | 'error';
+
+export interface RouteTimerTrigger {
+  route: string;
+  minutes: number;
+  etaTimestampMs?: number;
+  isNextBus?: boolean;
+  originalMinutes?: number;
+  timestamp: number;
+}
+
+export interface GMBETAArrivalItem {
+  eta_seq?: number;
+  diff?: number;
+  timestamp: string;
+  remarks_tc: string | null;
+  remarks_sc: string | null;
+  remarks_en: string | null;
+}
+
+export interface GMBETARouteSeqData {
+  route_seq: number;
+  stop_seq?: number;
+  enabled?: boolean;
+  eta: GMBETAArrivalItem[];
+  description_tc?: string;
+  description_sc?: string;
+  description_en?: string;
+}
+
 export interface GMBETAResponse {
-  data: Array<{
-    index: number;
-    eta_curr: string;
-    eta_next: string;
-    eta_next2: string;
-    timestamp: string;
-    remark_tc: string;
-    remark_sc: string;
-    remark_en: string;
-  }>;
+  type?: string;
+  version?: string;
+  generated_timestamp?: string;
+  data: GMBETARouteSeqData[];
 }
 
 export interface KMBETAResponse {
@@ -76,15 +106,22 @@ export interface KMBETAResponse {
 export interface MTRBETAResponse {
   busStop: Array<{
     busStopId: string;
+    isSuspended?: string | null;
+    busStopRemark?: string | null;
+    busStopStatusRemarkTitle?: string | null;
     bus: Array<{
       arrivalTimeInSecond: string;
       arrivalTimeText: string;
       departureTimeInSecond: string;
       departureTimeText: string;
       isScheduled: string;
+      isDelayed?: string;
       lineRef: string;
       busRemark?: string | null;
     }>;
   }>;
   routeName: string;
+  routeStatus?: string | null;
+  routeStatusRemarkTitle?: string | null;
+  routeStatusRemarkContent?: string | null;
 }

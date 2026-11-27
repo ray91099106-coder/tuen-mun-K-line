@@ -1,1 +1,84 @@
 @import "tailwindcss";
+
+:root {
+  --bg-canvas: #15181d;
+  --surface-top: #2b323b;
+  --surface-bottom: #21262e;
+  --surface-inset: #161a20;
+  --text-primary: #eef2f6;
+  --text-secondary: #8b95a5;
+  --copper-top: #e27d48;
+  --copper-bottom: #b85023;
+}
+
+@layer base {
+  html,
+  body {
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    color-scheme: dark;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.surface-raised {
+  background: linear-gradient(180deg, #2b323b 0%, #21262e 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.surface-card {
+  background: linear-gradient(180deg, #252b34 0%, #1d2229 100%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.surface-inset {
+  background: #161a20;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.65), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.btn-copper {
+  background: linear-gradient(180deg, #e27d48 0%, #b85023 100%);
+  border: 1px solid rgba(255, 195, 160, 0.28);
+  box-shadow: 0 4px 14px rgba(217, 119, 70, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  color: #fffaf7;
+  transition: transform 140ms ease, filter 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.btn-copper:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ea8956 0%, #c65929 100%);
+  box-shadow: 0 6px 18px rgba(217, 119, 70, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.btn-copper:active:not(:disabled) {
+  background: linear-gradient(180deg, #b85023 0%, #9b411b 100%);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4);
+  transform: translateY(1px);
+}
+
+.btn-tactile-secondary {
+  background: linear-gradient(180deg, #2b313a 0%, #20252c 100%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #cfd7e3;
+  transition: transform 140ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.btn-tactile-secondary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #343b46 0%, #272d36 100%);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #eef2f6;
+}
+
+.btn-tactile-secondary:active:not(:disabled) {
+  background: #1b2026;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.6);
+  transform: translateY(1px);
+}
