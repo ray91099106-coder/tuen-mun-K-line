@@ -584,10 +584,28 @@ export const DepartureTimer: React.FC<DepartureTimerProps> = ({
     return Math.max(0, earliestMinutes - leadMinutes);
   }, [isEarliestOverLead, earliestMinutes, earliestEtaTimestampMs, leadMinutes, lastUpdated]);
 
-  // Filter other routes that are > leadMinutes for quick selection
-  const otherRoutesOverLead = availableRoutes.filter(
-    r => r.minutes !== null && r.minutes > leadMinutes && r.route !== earliestRoute
-  );
+  // Filter other routes that are > leadMinutes for quick selection, sorted earliest first
+  const otherRoutesOverLead = useMemo(() => {
+    return availableRoutes
+      .map((r, index) => ({ r, index }))
+      .filter(({ r }) => r.minutes !== null && r.minutes > leadMinutes && r.route !== earliestRoute)
+      .sort((a, b) => {
+        const aHasTs = typeof a.r.etaTimestampMs === 'number' && Number.isFinite(a.r.etaTimestampMs);
+        const bHasTs = typeof b.r.etaTimestampMs === 'number' && Number.isFinite(b.r.etaTimestampMs);
+
+        if (aHasTs && bHasTs) {
+          const tsDiff = (a.r.etaTimestampMs as number) - (b.r.etaTimestampMs as number);
+          if (tsDiff !== 0) return tsDiff;
+        } else {
+          const minDiff =
+            (a.r.minutes ?? Number.POSITIVE_INFINITY) - (b.r.minutes ?? Number.POSITIVE_INFINITY);
+          if (minDiff !== 0) return minDiff;
+        }
+
+        return a.index - b.index;
+      })
+      .map(({ r }) => r);
+  }, [availableRoutes, leadMinutes, earliestRoute]);
 
   // Current ETA of active route for live display
   const currentActiveRouteInfo = availableRoutes.find(r => r.route === activeRoute);
